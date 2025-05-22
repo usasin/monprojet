@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- Si vous hébergez l’app sur un sous-chemin, modifiez la base href ici -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+  <meta name="description" content="Application Prospection GPS du Kit Commercial">
+
+  <!-- Google Sign-In Web client ID -->
+  <meta
+          name="google-signin-client_id"
+          content="163745254135-r9dvocoq91o2n4ulg3milp30b1gkdvu5.apps.googleusercontent.com"
+  />
+  <script src="https://apis.google.com/js/platform.js" async defer></script>
+
+  <!-- iOS web app meta & icon -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="ai_prospect_gps">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>ai_prospect_gps</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Google Maps JavaScript + Places Library -->
+  <script
+          src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBCNjj18RnJry3qgAEWB-Xk_ulA4TCgr70&libraries=places"
+          async defer>
+  </script>
+</head>
+<body>
+<!-- Flutter Web bootstrap -->
+<script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

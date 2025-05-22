@@ -1,0 +1,32 @@
+// ───── Injecte la Map ext.flutter ─────
+ext.flutter = [
+        compileSdkVersion : 35,
+        minSdkVersion     : 24
+]
+
+buildscript {
+    ext.kotlin_version = '1.9.10'
+
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        classpath 'com.android.tools.build:gradle:8.3.0'
+        classpath 'com.google.gms:google-services:4.4.2'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = "../build"
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+
