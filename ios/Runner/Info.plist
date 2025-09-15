@@ -4,22 +4,31 @@
 <dict>
   <key>CFBundleDevelopmentRegion</key>
   <string>$(DEVELOPMENT_LANGUAGE)</string>
+
   <key>CFBundleDisplayName</key>
   <string>Ai Prospect Gps</string>
+
   <key>CFBundleExecutable</key>
   <string>$(EXECUTABLE_NAME)</string>
+
   <key>CFBundleIdentifier</key>
   <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
+
   <key>CFBundleName</key>
   <string>ai_prospect_gps</string>
+
   <key>CFBundlePackageType</key>
   <string>APPL</string>
+
   <key>CFBundleShortVersionString</key>
   <string>$(FLUTTER_BUILD_NAME)</string>
+
   <key>CFBundleSignature</key>
   <string>????</string>
+
   <key>CFBundleVersion</key>
   <string>$(FLUTTER_BUILD_NUMBER)</string>
 
@@ -28,6 +37,7 @@
 
   <key>UILaunchStoryboardName</key>
   <string>LaunchScreen</string>
+
   <key>UIMainStoryboardFile</key>
   <string>Main</string>
 
@@ -37,6 +47,7 @@
     <string>UIInterfaceOrientationLandscapeLeft</string>
     <string>UIInterfaceOrientationLandscapeRight</string>
   </array>
+
   <key>UISupportedInterfaceOrientations~ipad</key>
   <array>
     <string>UIInterfaceOrientationPortrait</string>
@@ -64,11 +75,11 @@
   <key>NSLocationWhenInUseUsageDescription</key>
   <string>La localisation est utilisée pour optimiser votre itinéraire et planifier vos visites à proximité.</string>
 
-  <!-- AdMob App ID (Codemagic l'injecte) -->
+  <!-- AdMob App ID (si tu utilises une variable Codemagic, tu peux laisser cette ligne) -->
   <key>GADApplicationIdentifier</key>
   <string>$(ADMOB_APP_ID)</string>
 
-  <!-- Google Sign-In (URL scheme = REVERSED_CLIENT_ID du GoogleService-Info.plist) -->
+  <!-- Google Sign-In : schéma d’URL = REVERSED_CLIENT_ID (valeur réelle, pas de variable) -->
   <key>CFBundleURLTypes</key>
   <array>
     <dict>
@@ -76,9 +87,16 @@
       <string>Editor</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>$(GOOGLE_REVERSED_CLIENT_ID)</string>
+        <string>com.googleusercontent.apps.163745254135-3q1q92pq15663uc2gkg4nqvfk8jkjdfp</string>
       </array>
     </dict>
+  </array>
+
+  <!-- Autoriser les ouvertures d’URL Google (utile selon le flux utilisé) -->
+  <key>LSApplicationQueriesSchemes</key>
+  <array>
+    <string>google</string>
+    <string>com.googleusercontent.apps.163745254135-3q1q92pq15663uc2gkg4nqvfk8jkjdfp</string>
   </array>
 
 </dict>
