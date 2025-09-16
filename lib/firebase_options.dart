@@ -29,18 +29,17 @@ class DefaultFirebaseOptions {
     storageBucket: 'quiz-commercial.appspot.com',
   );
 
-static const FirebaseOptions ios = FirebaseOptions(
-  apiKey: 'AIzaSyCWE5qSeyBDrZIXWiNrt_-I4GAyQk20F6M', // <-- même que le plist
-  appId: '1:163745254135:ios:f1efd3b30f315ed73461f2',
-  messagingSenderId: '163745254135',
-  projectId: 'quiz-commercial',
-  databaseURL: 'https://quiz-commercial-default-rtdb.europe-west1.firebasedatabase.app',
-  storageBucket: 'quiz-commercial.appspot.com',
-  androidClientId: '163745254135-80hm56i1bkil3a3rl5ls6p6miks7cu6l.apps.googleusercontent.com',
-  iosClientId: '163745254135-3q1q92pq15663uc2gkg4nqvfk8jkjdfp.apps.googleusercontent.com', // <-- même que le plist
-  iosBundleId: 'com.ainego.aiProspectGps',
-);
-
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyCWE5qSeyBDrZIXWiNrt_-I4GAyQk20F6M',
+    appId: '1:163745254135:ios:f1efd3b30f315ed73461f2',
+    messagingSenderId: '163745254135',
+    projectId: 'quiz-commercial',
+    databaseURL: 'https://quiz-commercial-default-rtdb.europe-west1.firebasedatabase.app',
+    storageBucket: 'quiz-commercial.appspot.com',
+    androidClientId: '163745254135-80hm56i1bkil3a3rl5ls6p6miks7cu6l.apps.googleusercontent.com',
+    iosClientId: '163745254135-3q1q92pq15663uc2gkg4nqvfk8jkjdfp.apps.googleusercontent.com',
+    iosBundleId: 'com.ainego.aiProspectGps',
+  );
 
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyA6BxVTOmWxDIX3UzaA6GFhIa-YbdCvbmo',
