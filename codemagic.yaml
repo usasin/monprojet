@@ -1,1 +1,56 @@
+workflows:
+  ios_release:
+    name: iOS Release (Prospecto)
+    environment:
+      flutter: stable
+      xcode: latest
+      vars:
+        APP_VERSION: 1.0.0
+        ADMOB_APP_ID: $ADMOB_APP_ID   # crée la variable "ADMOB_APP_ID" en Secret dans Codemagic > Environment variables
+    scripts:
+      - name: 📦 Pub get
+        script: |
+          flutter pub get
+
+      - name: 🔧 Patch Info.plist (ATT, localisation, AdMob, URL scheme Google)
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          PLIST="ios/Runner/Info.plist"
+          GOOGLE_INFO="ios/Runner/GoogleService-Info.plist"
+          USR_TRACK_MSG="Votre autorisation nous permet d’afficher des publicités plus pertinentes via AdMob. Aucune donnée n’est vendue."
+          LOC_MSG="La localisation est utilisée pour optimiser votre itinéraire et planifier vos visites à proximité."
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool NO" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption NO" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSUserTrackingUsageDescription string $USR_TRACK_MSG" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :NSUserTrackingUsageDescription $USR_TRACK_MSG" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string $LOC_MSG" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :NSLocationWhenInUseUsageDescription $LOC_MSG" "$PLIST"
+          if [ -n "${ADMOB_APP_ID:-}" ]; then
+            /usr/libexec/PlistBuddy -c "Add :GADApplicationIdentifier string $ADMOB_APP_ID" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :GADApplicationIdentifier $ADMOB_APP_ID" "$PLIST"
+          fi
+          if [ -f "$GOOGLE_INFO" ]; then
+            REV_ID=$(/usr/libexec/PlistBuddy -c "Print :REVERSED_CLIENT_ID" "$GOOGLE_INFO" 2>/dev/null || true)
+            if [ -n "$REV_ID" ]; then
+              /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "$PLIST" 2>/dev/null || true
+              /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" "$PLIST" 2>/dev/null || true
+              /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleTypeRole string Editor" "$PLIST" 2>/dev/null || true
+              /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$PLIST" 2>/dev/null || true
+              /usr/libexec/PlistBuddy -c "Set :CFBundleURLTypes:0:CFBundleURLSchemes:0 $REV_ID" "$PLIST" 2>/dev/null \
+              || /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string $REV_ID" "$PLIST" 2>/dev/null || true
+            fi
+          fi
+
+      - name: 🧹 Pods clean & install
+        script: |
+          set -e
+          cd ios
+          rm -rf Pods Podfile.lock
+          pod repo update
+          pod install --verbose
+          cd ..
+
+      - name: 🛠 Build iOS release
+        script: |
+          flutter build ios --release
+
+    artifacts:
+      - build/ios/ipa/*.ipa
 
