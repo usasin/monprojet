@@ -1,44 +1,34 @@
 platform :ios, '14.0'
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
-project 'Runner', {
-  'Debug' => :debug,
-  'Profile' => :release,
-  'Release' => :release,
-}
-
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
   unless File.exist?(generated_xcode_build_settings_path)
-    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+    raise "#{generated_xcode_build_settings_path} must exist. Run `flutter pub get` first."
   end
   File.foreach(generated_xcode_build_settings_path) do |line|
-    matched = line.match(/FLUTTER_ROOT\=(.*)/)
-    return matched[1].strip if matched
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
   end
-  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}"
 end
 
-require File.expand_path(File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper'), __FILE__)
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  # Recommandé par Flutter (et compatible share_plus)
+  # évite l’erreur `Flutter/Flutter.h not found` et règle les conflits de plugins
   use_frameworks! :linkage => :static
-  # ⚠️ ne pas mettre use_modular_headers!
+  use_modular_headers!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
 post_install do |installer|
-  # Important: applique les settings Flutter manquants (sinon Flutter.h introuvable)
-  flutter_additional_ios_build_settings(installer)
-
-  # Force iOS 14 pour TOUS les pods (évite les cibles 9.0/10.0)
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
     end
   end
+  flutter_additional_ios_build_settings(installer)
 end
-
