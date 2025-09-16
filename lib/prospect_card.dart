@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/prospect.dart';
+import '../ui/bling.dart'; // ⬅️ pour FadeSlide
 
 class ProspectCard extends StatelessWidget {
   final Prospect p;
@@ -23,71 +24,74 @@ class ProspectCard extends StatelessWidget {
       ),
     );
 
-    return Card(
-      color : cs.surfaceContainerHighest,
-      shape : RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child : Padding(
-        padding: const EdgeInsets.all(16),
-        child  : Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            /* ---------- En-tête ---------- */
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
-                  child: Text(
-                    p.name.isNotEmpty ? p.name[0].toUpperCase() : '?',
+    return FadeSlide(
+      child: Card(
+        color : cs.surfaceContainerHighest.withOpacity(.9),
+        shape : RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+        child : Padding(
+          padding: const EdgeInsets.all(16),
+          child  : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              /* ---------- En-tête ---------- */
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: cs.primary,
+                    foregroundColor: cs.onPrimary,
+                    child: Text(
+                      p.name.isNotEmpty ? p.name[0].toUpperCase() : '?',
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(p.name,
-                      style: Theme.of(context).textTheme.titleMedium),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(p.name,
+                        style: Theme.of(context).textTheme.titleMedium),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
 
-            /* ---------- Adresse ---------- */
-            Text(p.address, style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 6),
+              /* ---------- Adresse ---------- */
+              Text(p.address, style: Theme.of(context).textTheme.bodyMedium),
+              const SizedBox(height: 6),
 
-            /* ---------- Chips cat. + statut ---------- */
-            Wrap(
-              spacing: 6,
-              runSpacing: -4,
-              children: [
-                Chip(
-                  label: Text(p.category),
-                  backgroundColor: cs.secondaryContainer,
-                  labelStyle: TextStyle(color: cs.onSecondaryContainer),
-                  visualDensity: VisualDensity.compact,
-                ),
-                if (p.status != null)
+              /* ---------- Chips cat. + statut ---------- */
+              Wrap(
+                spacing: 6,
+                runSpacing: -4,
+                children: [
                   Chip(
-                    label: Text(p.status!),
-                    backgroundColor: cs.tertiaryContainer,
-                    labelStyle: TextStyle(color: cs.onTertiaryContainer),
+                    label: Text(p.category),
+                    backgroundColor: cs.secondaryContainer,
+                    labelStyle: TextStyle(color: cs.onSecondaryContainer),
                     visualDensity: VisualDensity.compact,
                   ),
-              ],
-            ),
-            const Divider(),
+                  if (p.status != null)
+                    Chip(
+                      label: Text(p.status!),
+                      backgroundColor: cs.tertiaryContainer,
+                      labelStyle: TextStyle(color: cs.onTertiaryContainer),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                ],
+              ),
+              const Divider(),
 
-            /* ---------- Détails reporting ---------- */
-            if (p.phone != null && p.phone!.isNotEmpty)
-              _line(Icons.phone, p.phone!),
-            if (p.email != null && p.email!.isNotEmpty)
-              _line(Icons.email, p.email!),
-            if (p.prochaineVisite != null)
-              _line(Icons.calendar_month,
-                  DateFormat.yMMMd('fr_FR').format(p.prochaineVisite!)),
-            if (p.finishedAt != null)
-              _line(Icons.flag,
-                  'Terminé le ${DateFormat.yMMMd('fr_FR').add_Hm().format(p.finishedAt!)}'),
-          ],
+              /* ---------- Détails reporting ---------- */
+              if (p.phone != null && p.phone!.isNotEmpty)
+                _line(Icons.phone, p.phone!),
+              if (p.email != null && p.email!.isNotEmpty)
+                _line(Icons.email, p.email!),
+              if (p.prochaineVisite != null)
+                _line(Icons.calendar_month,
+                    DateFormat.yMMMd('fr_FR').format(p.prochaineVisite!)),
+              if (p.finishedAt != null)
+                _line(Icons.flag,
+                    'Terminé le ${DateFormat.yMMMd('fr_FR').add_Hm().format(p.finishedAt!)}'),
+            ],
+          ),
         ),
       ),
     );

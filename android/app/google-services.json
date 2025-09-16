@@ -48,6 +48,9 @@
           "current_key": "AIzaSyBA3GpdMujbxxea9QzKYosJrtF1n6OAKX4"
         },
         {
+          "current_key": "AIzaSyAfKXLnx0APpkDV3s3Mhoo0LQrttRzfmB4"
+        },
+        {
           "current_key": "AIzaSyC0ygxn9vmbe2LE0akV-sQDdfFS4C1FGrg"
         }
       ],
@@ -59,10 +62,78 @@
               "client_type": 3
             },
             {
-              "client_id": "163745254135-o2hgrkctq69k70e5stm2sv66ks17pjng.apps.googleusercontent.com",
+              "client_id": "163745254135-1504sel9h687l09tjjvhkc4pdb46j990.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.ainego.aiProspectGps"
+                "bundle_id": "com.quizcommercial2024.quizCommercial2024",
+                "app_store_id": "6747427318"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:163745254135:android:a4c0ec49a76632c63461f2",
+        "android_client_info": {
+          "package_name": "com.example.orientation"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "163745254135-c75o3bqhljmgdmc10p8rc9j4fue3ujou.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.orientation",
+            "certificate_hash": "9f0cce9c6cd23b710cfdd75f5738d5b4da49c9cd"
+          }
+        },
+        {
+          "client_id": "163745254135-nanh6c899fg6tp0vkb633gnj74cntudg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.orientation",
+            "certificate_hash": "49556de2f811c515db05e045c3104d54395aa492"
+          }
+        },
+        {
+          "client_id": "163745254135-nmfq9t8i0eat9n79aj8021a99up799t2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.orientation",
+            "certificate_hash": "3965df25720752c672ba8e0c4275dfbf48f497c3"
+          }
+        },
+        {
+          "client_id": "163745254135-r9dvocoq91o2n4ulg3milp30b1gkdvu5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBA3GpdMujbxxea9QzKYosJrtF1n6OAKX4"
+        },
+        {
+          "current_key": "AIzaSyAfKXLnx0APpkDV3s3Mhoo0LQrttRzfmB4"
+        },
+        {
+          "current_key": "AIzaSyC0ygxn9vmbe2LE0akV-sQDdfFS4C1FGrg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "163745254135-r9dvocoq91o2n4ulg3milp30b1gkdvu5.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "163745254135-1504sel9h687l09tjjvhkc4pdb46j990.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.quizcommercial2024.quizCommercial2024",
+                "app_store_id": "6747427318"
               }
             }
           ]
@@ -111,6 +182,9 @@
           "current_key": "AIzaSyBA3GpdMujbxxea9QzKYosJrtF1n6OAKX4"
         },
         {
+          "current_key": "AIzaSyAfKXLnx0APpkDV3s3Mhoo0LQrttRzfmB4"
+        },
+        {
           "current_key": "AIzaSyC0ygxn9vmbe2LE0akV-sQDdfFS4C1FGrg"
         }
       ],
@@ -122,10 +196,11 @@
               "client_type": 3
             },
             {
-              "client_id": "163745254135-o2hgrkctq69k70e5stm2sv66ks17pjng.apps.googleusercontent.com",
+              "client_id": "163745254135-1504sel9h687l09tjjvhkc4pdb46j990.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.ainego.aiProspectGps"
+                "bundle_id": "com.quizcommercial2024.quizCommercial2024",
+                "app_store_id": "6747427318"
               }
             }
           ]

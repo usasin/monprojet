@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/prospect.dart';
 import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
+import '../widgets/brand_background.dart';
 
 class ProspectsFinishedPage extends StatefulWidget {
   static const routeName = '/prospects_finished';
@@ -26,7 +27,6 @@ class _ProspectsFinishedPageState extends State<ProspectsFinishedPage> {
   List<File> _files = [];
   late Directory _dateDir;
 
-  /* ─────────────── init ─────────────── */
   @override
   void initState() {
     super.initState();
@@ -63,7 +63,7 @@ class _ProspectsFinishedPageState extends State<ProspectsFinishedPage> {
     final sb = StringBuffer()..writeln('Prospections du $dayStr\n');
     for (var p in _list) {
       sb.writeln(
-          '${p.name} — ${p.address} — [${p.category}] — Statut : ${p.status}');
+          '${p.name} — ${p.address} — [${p.category}] — Statut : ${p.status ?? '-'} — Clôturé : ${p.finishedAt != null ? 'oui' : 'non'}');
     }
     final file = File('${_dateDir.path}/rapport-$dayStr.txt');
     await file.writeAsString(sb.toString());
@@ -72,70 +72,86 @@ class _ProspectsFinishedPageState extends State<ProspectsFinishedPage> {
     await Share.shareXFiles([XFile(file.path)], subject: 'Prospections $dayStr');
   }
 
-  /* ─────────────── Camembert ─────────────── */
+  /* ─────────────── Camembert (non-chevauchant) ─────────────── */
   Widget _buildPieChart(ThemeData theme) {
     if (_list.isEmpty) return const SizedBox.shrink();
-
-    final present  = _list.where((p) => p.status == 'présent').length;
-    final absent   = _list.where((p) => p.status == 'absent').length;
-    final rdv      = _list.where((p) => p.status == 'rdv').length;
-    final closed   = _list.where((p) => p.finishedAt != null).length;
-    final total = present + absent + rdv + closed;
+    // règle : si finishedAt != null -> "clôturé" (peu importe status)
+    // sinon status 'rdv' > 'présent' > 'absent'
+    int closed = 0, rdv = 0, present = 0, absent = 0;
+    for (final p in _list) {
+      if (p.finishedAt != null) {
+        closed++;
+      } else {
+        final s = (p.status ?? '').toLowerCase();
+        if (s == 'rdv') rdv++;
+        else if (s == 'présent' || s == 'present') present++;
+        else if (s == 'absent') absent++;
+      }
+    }
+    final total = closed + rdv + present + absent;
     if (total == 0) return const SizedBox.shrink();
 
-    PieChartSectionData sec(String title, int value, Color color) {
+    PieChartSectionData sec(int value, Color color) {
       final pct = value / total * 100;
       return PieChartSectionData(
         value   : value.toDouble(),
-        title   : value == 0 ? '' : '${pct.toStringAsFixed(0)} %',
+        title   : value == 0 ? '' : '${pct.toStringAsFixed(0)} %',
         color   : color,
-        radius  : 60,
+        radius  : 62,
         titleStyle: theme.textTheme.labelSmall!
-            .copyWith(color: theme.colorScheme.onPrimary),
+            .copyWith(color: theme.colorScheme.onPrimary, fontWeight: FontWeight.w800),
       );
     }
 
     final cs = theme.colorScheme;
-    final sections = [
-      if (present > 0) sec('Présent',  present,  cs.primary),
-      if (absent  > 0) sec('Absent',   absent,   cs.error),
-      if (rdv     > 0) sec('RDV',      rdv,      cs.tertiary),
-      if (closed  > 0) sec('Clôturé',  closed,   cs.secondary),
+    final sections = <PieChartSectionData>[
+      if (present > 0) sec(present, cs.primary),
+      if (absent  > 0) sec(absent , cs.error),
+      if (rdv     > 0) sec(rdv    , cs.tertiary),
+      if (closed  > 0) sec(closed , cs.secondary),
     ];
 
-    Widget legend(String lbl, Color clr, int n) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 12, height: 12, decoration: BoxDecoration(
-            color: clr, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text('$lbl ($n)', style: theme.textTheme.bodySmall),
-      ],
+    Widget chip(String lbl, Color clr, int n) => Chip(
+      backgroundColor: clr.withOpacity(.18),
+      shape: StadiumBorder(side: BorderSide(color: clr.withOpacity(.35))),
+      label: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 10, height: 10, decoration: BoxDecoration(color: clr, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Text('$lbl ($n)'),
+      ]),
     );
 
-    return Column(
-      children: [
-        SizedBox(
-          height: 180,
-          child : PieChart(PieChartData(
-            sections        : sections,
-            centerSpaceRadius: 24,
-            sectionsSpace   : 2,
-          )),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 12,
+    return Card(
+      color: cs.surfaceContainerHighest.withOpacity(.95),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+        child: Column(
           children: [
-            if (present > 0) legend('Présent',  cs.primary,    present),
-            if (absent  > 0) legend('Absent',   cs.error,      absent),
-            if (rdv     > 0) legend('RDV',      cs.tertiary,   rdv),
-            if (closed  > 0) legend('Clôturé',  cs.secondary,  closed),
+            SizedBox(
+              height: 190,
+              child : PieChart(PieChartData(
+                sections        : sections,
+                centerSpaceRadius: 28,
+                sectionsSpace   : 2,
+              )),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (present > 0) chip('Présent',  cs.primary,   present),
+                if (absent  > 0) chip('Absent',   cs.error,     absent),
+                if (rdv     > 0) chip('RDV',      cs.tertiary,  rdv),
+                if (closed  > 0) chip('Clôturé',  cs.secondary, closed),
+              ],
+            ),
           ],
         ),
-        const Divider(),
-      ],
+      ),
     );
   }
 
@@ -148,74 +164,87 @@ class _ProspectsFinishedPageState extends State<ProspectsFinishedPage> {
 
     return Theme(
       data: theme,
-      child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: cs.primary,
-          foregroundColor: cs.onPrimary,
-          title: Text('Terminés – $formattedDate'),
-          actions: [
-            IconButton.filledTonal(
-              icon : const Icon(Icons.share),
-              tooltip: 'Partager tout',
-              onPressed: _list.isEmpty ? null : _shareAll,
-            ),
-          ],
-        ),
-
-        body: Column(
-          children: [
-            /* -------- Graphique camembert -------- */
-            _buildPieChart(theme),
-
-            /* -------- Dossier + fichiers -------- */
-            if (_files.isNotEmpty) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Row(
-                  children: [
-                    Icon(Icons.folder, color: cs.primary),
-                    const SizedBox(width: 8),
-                    Text('Fichiers du $formattedDate',
-                        style: theme.textTheme.titleMedium),
-                  ],
-                ),
+      child: BrandBackground(
+        gradientColors: const [Color(0xFFDEEFFF), Color(0xFFB3C7FF), Color(0xFFDCC8FF)],
+        blurSigma: 14,
+        animate: true,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            title: Text('Terminés — $formattedDate',
+                style: const TextStyle(fontWeight: FontWeight.w800)),
+            centerTitle: true,
+            actions: [
+              IconButton.filledTonal(
+                icon : const Icon(Icons.share_rounded),
+                tooltip: 'Partager tout',
+                onPressed: _list.isEmpty ? null : _shareAll,
               ),
-              SizedBox(
-                height: 100,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _files.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) {
-                    final f = _files[i];
-                    final name = f.path.split('/').last;
-                    return FilledButton.tonalIcon(
-                      icon : const Icon(Icons.insert_drive_file),
-                      label: Text(name, overflow: TextOverflow.ellipsis),
-                      onPressed: () => Share.shareXFiles([XFile(f.path)], subject: name),
-                    );
-                  },
-                ),
-              ),
-              const Divider(),
             ],
+          ),
 
-            /* -------- Liste prospects -------- */
-            Expanded(
-              child: _list.isEmpty
-                  ? Center(
-                child: Text('Aucun prospect pour le $formattedDate.',
-                    style: TextStyle(color: cs.onSurfaceVariant)),
-              )
-                  : ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: _list.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (_, i) => _ProspectCard(_list[i]),
+          body: Column(
+            children: [
+              /* -------- Graphique camembert -------- */
+              _buildPieChart(theme),
+
+              /* -------- Dossier + fichiers -------- */
+              if (_files.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.folder_rounded, color: cs.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text('Fichiers du $formattedDate',
+                            style: theme.textTheme.titleMedium,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: 100,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _files.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (_, i) {
+                      final f = _files[i];
+                      final name = f.path.split('/').last;
+                      return FilledButton.tonalIcon(
+                        icon : const Icon(Icons.insert_drive_file_rounded),
+                        label: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 180),
+                          child: Text(name, overflow: TextOverflow.ellipsis),
+                        ),
+                        onPressed: () => Share.shareXFiles([XFile(f.path)], subject: name),
+                      );
+                    },
+                  ),
+                ),
+              ],
+
+              /* -------- Liste prospects -------- */
+              Expanded(
+                child: _list.isEmpty
+                    ? Center(
+                  child: Text('Aucun prospect pour le $formattedDate.',
+                      style: TextStyle(color: cs.onSurfaceVariant)),
+                )
+                    : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  itemCount: _list.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (_, i) => _ProspectCard(_list[i]),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -238,20 +267,20 @@ class _ProspectCard extends StatelessWidget {
         children: [
           Icon(icn, size: 18, color: cs.onSurfaceVariant),
           const SizedBox(width: 6),
-          Expanded(child: Text(txt)),
+          Expanded(child: Text(txt, maxLines: 1, overflow: TextOverflow.ellipsis)),
         ],
       ),
     );
 
     return Card(
-      color : cs.surfaceContainerHighest,
+      color : cs.surfaceContainerHighest.withOpacity(.95),
       shape : RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child : Padding(
         padding: const EdgeInsets.all(16),
         child  : Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /* ---------- En‑tête ---------- */
+            /* ---------- En-tête ---------- */
             Row(
               children: [
                 CircleAvatar(
@@ -260,13 +289,16 @@ class _ProspectCard extends StatelessWidget {
                   child: Text(p.name.isNotEmpty ? p.name[0].toUpperCase() : '?'),
                 ),
                 const SizedBox(width: 12),
-                Expanded(child: Text(p.name, style: txtTheme.titleMedium)),
+                Expanded(child: Text(p.name,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: txtTheme.titleMedium!.copyWith(fontWeight: FontWeight.w800))),
               ],
             ),
             const SizedBox(height: 8),
 
             /* ---------- Adresse ---------- */
-            Text(p.address, style: txtTheme.bodyMedium),
+            Text(p.address, style: txtTheme.bodyMedium,
+                maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 6),
 
             /* ---------- Chips cat. + statut ---------- */
@@ -293,19 +325,19 @@ class _ProspectCard extends StatelessWidget {
 
             /* ---------- Détails ---------- */
             if (p.phone != null && p.phone!.isNotEmpty)
-              line(Icons.phone, p.phone!),
+              line(Icons.phone_rounded, p.phone!),
             if (p.email != null && p.email!.isNotEmpty)
-              line(Icons.email, p.email!),
+              line(Icons.email_rounded, p.email!),
             if (p.role != null && p.role!.isNotEmpty)
-              line(Icons.badge, p.role!),
+              line(Icons.badge_rounded, p.role!),
             if (p.note != null && p.note!.isNotEmpty)
-              line(Icons.note, p.note!),
+              line(Icons.notes_rounded, p.note!),
             if (p.prochaineVisite != null)
-              line(Icons.calendar_month,
+              line(Icons.calendar_month_rounded,
                   DateFormat.yMMMd('fr_FR').format(p.prochaineVisite!)),
-            line(Icons.flag, 'Clôturé : ${p.finishedAt != null ? 'oui' : 'non'}'),
+            line(Icons.flag_rounded, 'Clôturé : ${p.finishedAt != null ? 'oui' : 'non'}'),
             if (p.finishedAt != null)
-              line(Icons.timer,
+              line(Icons.timer_rounded,
                   DateFormat.yMMMd('fr_FR').add_Hm().format(p.finishedAt!)),
           ],
         ),
