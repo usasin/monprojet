@@ -1,5 +1,4 @@
 platform :ios, '14.0'
-
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
 project 'Runner', {
@@ -33,10 +32,12 @@ end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
+    # ⚠️ INDISPENSABLE : applique les réglages Flutter (inclut les headers/xcconfigs nécessaires à Flutter/Flutter.h)
+    flutter_additional_ios_build_settings(target)
+
+    # Forcer iOS 14 pour tous les Pods (évite les vieux min target à 9.0/10.0)
     target.build_configurations.each do |config|
-      # Forcer tous les Pods à iOS 14.0 (supprime les warnings 9.0/10.0 et évite les plantages)
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
-      # (Optionnel) Fix warnings Swift avec Xcode 16
       config.build_settings['SWIFT_VERSION'] = '5.0'
     end
   end
