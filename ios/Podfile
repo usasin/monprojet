@@ -1,15 +1,14 @@
-# ios/Podfile
 platform :ios, '14.0'
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 source 'https://cdn.cocoapods.org/'
 
 def flutter_root
   generated_xcode_build_settings = File.expand_path(
-    File.join('..', 'Flutter', 'Generated.xcconfig'),
+    File.join('..','Flutter','Generated.xcconfig'),
     __FILE__
   )
   unless File.exist?(generated_xcode_build_settings)
-    raise "#{generated_xcode_build_settings} must exist. Run 'flutter pub get' first."
+    raise "#{generated_xcode_build_settings} must exist. Run `flutter pub get` first."
   end
   File.foreach(generated_xcode_build_settings) do |line|
     if line =~ /FLUTTER_ROOT\=(.*)/
@@ -20,14 +19,14 @@ def flutter_root
 end
 
 require File.expand_path(
-  File.join('packages', 'flutter_tools', 'bin', 'podhelper'),
+  File.join('packages','flutter_tools','bin','podhelper'),
   flutter_root
 )
 
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  # Ton ancien comportement, mais en statique pour éviter des soucis de headers
+  # même logique que ton app qui marche, en statique
   use_frameworks! :linkage => :static
   use_modular_headers!
 
@@ -39,12 +38,14 @@ post_install do |installer|
     flutter_additional_ios_build_settings(t)
 
     t.build_configurations.each do |config|
+      # ← google_maps_flutter_ios demande iOS 14
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
-      # Évite des erreurs d'import quand on est en frameworks
+      # évite des soucis d’imports avec frameworks statiques
       config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      config.build_settings['SWIFT_VERSION'] = '5.0'
     end
 
-    # Assure que le pod 'Flutter' expose bien un module (headers visibles)
+    # s’assure que le pod Flutter expose un module
     if t.name == 'Flutter'
       t.build_configurations.each do |config|
         config.build_settings['DEFINES_MODULE'] = 'YES'
