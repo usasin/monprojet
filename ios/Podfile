@@ -1,33 +1,47 @@
 platform :ios, '14.0'
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..','Flutter','Generated.xcconfig'), __FILE__)
-  raise "#{generated_xcode_build_settings_path} must exist. Run `flutter pub get` first." unless File.exist?(generated_xcode_build_settings_path)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. Run `flutter pub get` first."
+  end
   File.foreach(generated_xcode_build_settings_path) do |line|
     m = line.match(/FLUTTER_ROOT\=(.*)/)
     return m[1].strip if m
   end
+  raise "FLUTTER_ROOT not found. Run `flutter pub get`."
 end
 
 require File.expand_path(File.join('packages','flutter_tools','bin','podhelper'), flutter_root)
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  use_frameworks! :linkage => :static
-  use_modular_headers!
+  # ⚠️ NE PAS activer sauf obligation d’un plugin.
+  # Si nécessaire, utilises la variante statique :
+  # use_frameworks! :linkage => :static
+
+  # ⚠️ Ne pas utiliser use_modular_headers! globalement.
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
-    # indispensable pour que les plugins trouvent <Flutter/Flutter.h>
+    # indispensable pour que les plugins Flutter configurent correctement Xcode
     flutter_additional_ios_build_settings(target)
 
-    # on force iOS 14 pour tous les pods
     target.build_configurations.each do |config|
+      # iOS minimum 14 partout
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
       config.build_settings['SWIFT_VERSION'] = '5.0'
+      # évite quelques warnings/headers casse-pieds
+      config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
     end
   end
 end
