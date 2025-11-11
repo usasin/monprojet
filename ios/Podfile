@@ -21,11 +21,15 @@ target 'Runner' do
   flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
 end
 
+# Nettoyage et réglages après installation des pods
 post_install do |installer|
   installer.pods_project.targets.each do |t|
     flutter_additional_ios_build_settings(t)
     t.build_configurations.each do |config|
+      # iOS min 15 pour tous les pods
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+      # Laisser Xcode choisir la bonne version de Swift (ne PAS forcer 5.0)
+      config.build_settings.delete('SWIFT_VERSION')
     end
   end
 end
