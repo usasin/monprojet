@@ -3,22 +3,23 @@ ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 source 'https://cdn.cocoapods.org/'
 
 def flutter_root
-  generated = File.expand_path(File.join('..','Flutter','Generated.xcconfig'), __FILE__)
-  raise "#{generated} must exist. Run 'flutter pub get' first." unless File.exist?(generated)
-  File.foreach(generated) do |line|
-    m = line.match(/FLUTTER_ROOT=(.*)/)
-    return m[1].strip if m
+  generated_xcode_build_settings = File.expand_path(File.join('..','Flutter','Generated.xcconfig'), __FILE__)
+  raise "#{generated_xcode_build_settings} must exist. Run `flutter pub get` first." unless File.exist?(generated_xcode_build_settings)
+  File.foreach(generated_xcode_build_settings) do |line|
+    if line =~ /FLUTTER_ROOT\=(.*)/
+      return Regexp.last_match(1).strip
+    end
   end
-  raise "FLUTTER_ROOT not found in #{generated}"
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings}"
 end
 
 require File.expand_path(File.join('packages','flutter_tools','bin','podhelper'), flutter_root)
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  # <- IMPORTANT : frameworks statiques, règle les soucis de modulemap
-  use_frameworks! :linkage => :static
-  flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
+  # NE PAS activer use_frameworks! sauf si un plugin l’exige
+  use_modular_headers!           # ← ← ← **IMPORTANT**
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
 post_install do |installer|
@@ -27,8 +28,7 @@ post_install do |installer|
     t.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
       config.build_settings['SWIFT_VERSION'] = '5.0'
-      config.build_settings['CLANG_ENABLE_MODULES'] = 'YES'
-      config.build_settings['DEFINES_MODULE'] = 'YES'
+      config.build_settings['DEFINES_MODULE'] = 'YES' if t.name == 'Flutter'
     end
   end
 end
