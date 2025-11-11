@@ -1,15 +1,11 @@
-# ios/Podfile
-platform :ios, '13.0'
+platform :ios, '14.0'
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 source 'https://cdn.cocoapods.org/'
 
 def flutter_root
-  generated_xcode_build_settings = File.expand_path(
-    File.join('..', 'Flutter', 'Generated.xcconfig'),
-    __FILE__
-  )
+  generated_xcode_build_settings = File.expand_path(File.join('..','Flutter','Generated.xcconfig'), __FILE__)
   unless File.exist?(generated_xcode_build_settings)
-    raise "#{generated_xcode_build_settings} must exist. Run 'flutter pub get' first."
+    raise "#{generated_xcode_build_settings} must exist. Run `flutter pub get` first."
   end
   File.foreach(generated_xcode_build_settings) do |line|
     if line =~ /FLUTTER_ROOT\=(.*)/
@@ -19,36 +15,23 @@ def flutter_root
   raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings}"
 end
 
-require File.expand_path(
-  File.join('packages', 'flutter_tools', 'bin', 'podhelper'),
-  flutter_root
-)
-
+require File.expand_path(File.join('packages','flutter_tools','bin','podhelper'), flutter_root)
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  # Ton ancien comportement, mais en statique pour éviter des soucis de headers
-  use_frameworks! :linkage => :static
-  use_modular_headers!
-
+  # NE PAS activer, sauf obligation d’un plugin :
+  # use_frameworks! :linkage => :static
+  # use_modular_headers!
   flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
 end
 
 post_install do |installer|
   installer.pods_project.targets.each do |t|
     flutter_additional_ios_build_settings(t)
-
     t.build_configurations.each do |config|
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
-      # Évite des erreurs d'import quand on est en frameworks
-      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-    end
-
-    # Assure que le pod 'Flutter' expose bien un module (headers visibles)
-    if t.name == 'Flutter'
-      t.build_configurations.each do |config|
-        config.build_settings['DEFINES_MODULE'] = 'YES'
-      end
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+      config.build_settings['SWIFT_VERSION'] = '5.0'
+      config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
     end
   end
 end
