@@ -1,30 +1,31 @@
-# Uncomment the next line to define a global platform for your project
 platform :ios, '15.0'
-
-# CocoaPods analytics sends network stats synchronously (disable for faster installs)
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+source 'https://cdn.cocoapods.org/'
 
-project 'Runner', 'Debug' => :debug, 'Release' => :release
-
-# Installer les pods Flutter et plugins
-def flutter_install_all_ios_pods(flutter_application_path)
-  require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_application_path)
+def flutter_root
+  generated_xcode_build_settings = File.expand_path(File.join('..','Flutter','Generated.xcconfig'), __FILE__)
+  raise "#{generated_xcode_build_settings} must exist. Run `flutter pub get` first." unless File.exist?(generated_xcode_build_settings)
+  File.foreach(generated_xcode_build_settings) do |line|
+    m = line.match(/FLUTTER_ROOT\=(.*)/)
+    return m[1].strip if m
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings}"
 end
 
-target 'Runner' do
-  use_frameworks!
-  use_modular_headers!
+require File.expand_path(File.join('packages','flutter_tools','bin','podhelper'), flutter_root)
+flutter_ios_podfile_setup
 
+target 'Runner' do
+  use_frameworks! :linkage => :static
+  use_modular_headers!
   flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
 end
 
-# Post-installation: forcer iOS 15.0 mini, enlever le forçage Swift
 post_install do |installer|
   installer.pods_project.targets.each do |t|
     flutter_additional_ios_build_settings(t)
     t.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
-      # config.build_settings['SWIFT_VERSION'] = '5.0'  # (Supprimé pour éviter les conflits de version Swift)
     end
   end
 end
