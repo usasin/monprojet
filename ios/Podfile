@@ -16,8 +16,8 @@ require File.expand_path(File.join('packages','flutter_tools','bin','podhelper')
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  use_modular_headers!   # <= IMPORTANT pour Firebase + Swift
-  # NE PAS activer use_frameworks! sauf obligation d’un plugin :
+  use_modular_headers!   # indispensable pour Firebase en Swift
+  # NE PAS activer use_frameworks! sauf obligation d'un plugin
   # use_frameworks! :linkage => :static
 
   flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
