@@ -1,34 +1,30 @@
-platform :ios, '14.0'
+# Uncomment the next line to define a global platform for your project
+platform :ios, '15.0'
+
+# CocoaPods analytics sends network stats synchronously (disable for faster installs)
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
-source 'https://cdn.cocoapods.org/'
 
-def flutter_root
-  generated_xcode_build_settings = File.expand_path(File.join('..','Flutter','Generated.xcconfig'), __FILE__)
-  raise "#{generated_xcode_build_settings} must exist. Run `flutter pub get` first." unless File.exist?(generated_xcode_build_settings)
-  File.foreach(generated_xcode_build_settings) do |line|
-    if line =~ /FLUTTER_ROOT\=(.*)/
-      return Regexp.last_match(1).strip
-    end
-  end
-  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings}"
+project 'Runner', 'Debug' => :debug, 'Release' => :release
+
+# Installer les pods Flutter et plugins
+def flutter_install_all_ios_pods(flutter_application_path)
+  require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_application_path)
 end
-
-require File.expand_path(File.join('packages','flutter_tools','bin','podhelper'), flutter_root)
-flutter_ios_podfile_setup
 
 target 'Runner' do
-  # NE PAS activer use_frameworks!
-  use_modular_headers!                    # ← ← ← **doit être présent (pas de #)**
-  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  use_frameworks!
+  use_modular_headers!
+
+  flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
 end
 
+# Post-installation: forcer iOS 15.0 mini, enlever le forçage Swift
 post_install do |installer|
   installer.pods_project.targets.each do |t|
     flutter_additional_ios_build_settings(t)
     t.build_configurations.each do |config|
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
-      config.build_settings['SWIFT_VERSION'] = '5.0'
-      config.build_settings['DEFINES_MODULE'] = 'YES' if t.name == 'Flutter'
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+      # config.build_settings['SWIFT_VERSION'] = '5.0'  # (Supprimé pour éviter les conflits de version Swift)
     end
   end
 end
