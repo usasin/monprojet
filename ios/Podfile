@@ -17,8 +17,8 @@ require File.expand_path(File.join('packages','flutter_tools','bin','podhelper')
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  # NE PAS activer use_frameworks! sauf si un plugin l’exige
-  use_modular_headers!           # ← ← ← **IMPORTANT**
+  # NE PAS activer use_frameworks!
+  use_modular_headers!                    # ← ← ← **doit être présent (pas de #)**
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
