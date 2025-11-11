@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+ import 'package:flutter/material.dart';
 
 /// Palette 2025
 const Color kLogoRed  = Color(0xFFCA0C0A); // rouge “tie” du logo
@@ -7,8 +7,12 @@ const Color kBeige    = Color(0xFFFAF7F2); // fond très clair
 
 Color _darken(Color c, [double a = .25]) {
   final f = 1 - a;
-  return Color.fromARGB(c.alpha,
-      (c.red * f).round(), (c.green * f).round(), (c.blue * f).round());
+  return Color.fromARGB(
+    c.alpha,
+    (c.red * f).round(),
+    (c.green * f).round(),
+    (c.blue * f).round(),
+  );
 }
 
 class ThemeProvider with ChangeNotifier {
@@ -54,7 +58,7 @@ class ThemeProvider with ChangeNotifier {
       titleTextStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
       surfaceTintColor: Colors.transparent,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: Colors.white.withOpacity(.75),
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -126,7 +130,7 @@ class ThemeProvider with ChangeNotifier {
       titleTextStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
       surfaceTintColor: Colors.transparent,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: const Color(0xFF1A1F29).withOpacity(.6),
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
