@@ -5,7 +5,7 @@ source 'https://cdn.cocoapods.org/'
 def flutter_root
   generated_xcode_build_settings = File.expand_path(File.join('..','Flutter','Generated.xcconfig'), __FILE__)
   unless File.exist?(generated_xcode_build_settings)
-    raise "#{generated_xcode_build_settings} must exist. Run `flutter pub get` first."
+    raise "#{generated_xcode_build_settings} must exist. Run 'flutter pub get' first."
   end
   File.foreach(generated_xcode_build_settings) do |line|
     if line =~ /FLUTTER_ROOT\=(.*)/
