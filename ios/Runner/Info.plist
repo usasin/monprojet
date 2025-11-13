@@ -71,15 +71,22 @@
   <key>NSUserTrackingUsageDescription</key>
   <string>Votre autorisation nous permet d’afficher des publicités plus pertinentes via AdMob. Aucune donnée n’est vendue.</string>
 
-  <!-- Localisation (When In Use) -->
+  <!-- Localisation (utilisation au premier plan) -->
   <key>NSLocationWhenInUseUsageDescription</key>
   <string>La localisation est utilisée pour optimiser votre itinéraire et planifier vos visites à proximité.</string>
 
-  <!-- AdMob App ID (si tu utilises une variable Codemagic, tu peux laisser cette ligne) -->
+  <!-- ⚠️ AJOUTS pour lever ITMS-90683 -->
+  <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+  <string>Prospecto peut accéder à votre position même en arrière-plan pour maintenir l’itinéraire et le reporting à jour durant vos déplacements.</string>
+  <key>NSLocationAlwaysUsageDescription</key>
+  <string>Prospecto a besoin d’un accès permanent à la localisation pour suivre vos visites même si l’app n’est pas au premier plan.</string>
+  <!-- /AJOUTS -->
+
+  <!-- AdMob App ID -->
   <key>GADApplicationIdentifier</key>
   <string>$(ADMOB_APP_ID)</string>
 
-  <!-- Google Sign-In : schéma d’URL = REVERSED_CLIENT_ID (valeur réelle, pas de variable) -->
+  <!-- Google Sign-In : schéma d’URL -->
   <key>CFBundleURLTypes</key>
   <array>
     <dict>
@@ -92,7 +99,7 @@
     </dict>
   </array>
 
-  <!-- Autoriser les ouvertures d’URL Google (utile selon le flux utilisé) -->
+  <!-- Autoriser des schemes Google -->
   <key>LSApplicationQueriesSchemes</key>
   <array>
     <string>google</string>
