@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,9 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'firebase_options.dart';
+
+// Permissions
+import 'core/permissions.dart';
 
 // Providers
 import 'pages/billing_screen.dart';
@@ -25,7 +29,7 @@ import 'pages/prospect_form_page.dart';
 import 'pages/prospects_finished_page.dart';
 import 'pages/settings_screen.dart';
 
-// Entreprise (toujours dispo mais plus au démarrage)
+// Entreprise
 import 'pages/org_mode_gate.dart';
 import 'pages/org_create_screen.dart';
 import 'pages/org_join_screen.dart';
@@ -33,7 +37,18 @@ import 'pages/org_members_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  MobileAds.instance.initialize();
+
+  // 1) Demander ATT + Localisation AVANT la pub
+  await Permissions.init();
+
+  // 2) Initialiser AdMob APRÈS ATT
+  if (Platform.isIOS) {
+    await MobileAds.instance.initialize();
+  } else {
+    MobileAds.instance.initialize();
+  }
+
+  // 3) i18n + Firebase
   await EasyLocalization.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
@@ -71,7 +86,7 @@ class MyApp extends StatelessWidget {
       supportedLocales: context.supportedLocales,
       locale: context.locale,
 
-      // 👉 On démarre maintenant DIRECTEMENT sur la page de login
+      // Démarrage direct sur Login
       initialRoute: LoginScreen.routeName,
 
       routes: {
@@ -100,7 +115,7 @@ class MyApp extends StatelessWidget {
         SettingsScreen.routeName          : (_) => const SettingsScreen(),
         BillingScreen.routeName           : (_) => const BillingScreen(),
 
-        // Entreprise (toujours présents mais plus utilisés au démarrage)
+        // Entreprise
         OrgModeGate.routeName             : (_) => const OrgModeGate(),
         OrgCreateScreen.routeName         : (_) => const OrgCreateScreen(),
         OrgJoinScreen.routeName           : (_) => const OrgJoinScreen(),
