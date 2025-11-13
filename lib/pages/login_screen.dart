@@ -1,9 +1,10 @@
 // lib/pages/login_screen.dart
 // ------------------------------------------------------------
 // Login modernisé (fond clair/bleuté) avec "onglets" sur la même page.
-// - Onglet "Déjà un compte" : Email/MDP + Se souvenir + Google + Invité (couleur différente)
+// - Onglet "Déjà un compte" : Email/MDP + Se souvenir + Google + Invité
 // - Onglet "S'inscrire"    : Nom + Email + MDP
-// - Bouton retour vers OrgModeGate
+// - MODE SOLO FORCÉ : après auth → HomePage, sans aucun frein
+// - PLUS DE PREMIÈRE PAGE "CHOISIR LE MODE" : cette page est autonome
 // ------------------------------------------------------------
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
@@ -25,7 +26,6 @@ import '../widgets/frosted_card.dart';
 import '../ui/bling.dart';
 
 import 'home_page.dart';
-import 'org_mode_gate.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -56,7 +56,10 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
-    _logoCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 5))..repeat();
+    _logoCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..repeat();
     _logoT = CurvedAnimation(parent: _logoCtrl, curve: Curves.easeInOutSine);
 
     _redirectIfLogged();
@@ -72,49 +75,47 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  Future<void> _saveFcmToken(User user) async {
+  // ===================== MODE SOLO SIMPLIFIÉ =====================
+
+  /// Forcer le profil en SOLO + enregistrer le token FCM.
+  Future<void> _forceSolo(User user) async {
     try {
       final token = await FirebaseMessaging.instance.getToken();
-      if (token != null) {
-        await FirebaseFirestore.instance.collection('users')
-            .doc(user.uid).set({'fcmToken': token}, SetOptions(merge: true));
-      }
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'mode'        : 'SOLO',
+        'soloSince'   : FieldValue.serverTimestamp(),
+        'currentOrgId': null,
+        'lastLoginAt' : FieldValue.serverTimestamp(),
+        if (token != null) 'fcmToken': token,
+      }, SetOptions(merge: true));
     } catch (_) {}
   }
 
+  /// Après authentification → on force SOLO → on va direct à HomePage (pas de retour).
   Future<void> _routeAfterAuth(User user) async {
-    await _saveFcmToken(user);
-
-    final snap = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final data = snap.data() ?? {};
-    final orgId = data['currentOrgId'] as String?;
-    final mode  = data['mode'] as String?;
-    final isSolo = user.isAnonymous || (mode == 'SOLO');
-
+    await _forceSolo(user);
     if (!mounted) return;
-    Navigator.pushReplacementNamed(
-      context,
-      isSolo ? HomePage.routeName : (orgId == null ? OrgModeGate.routeName : HomePage.routeName),
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      HomePage.routeName,
+          (r) => false,
     );
   }
 
+  /// Si déjà connecté au démarrage → on force SOLO → HomePage direct.
   Future<void> _redirectIfLogged() async {
     final u = _auth.currentUser;
     if (u == null) return;
-    final snap = await FirebaseFirestore.instance.collection('users').doc(u.uid).get();
-    final data = snap.data() ?? {};
-    final orgId = data['currentOrgId'] as String?;
-    final mode  = data['mode'] as String?;
-    final isSolo = u.isAnonymous || (mode == 'SOLO');
-
+    await _forceSolo(u);
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Navigator.pushReplacementNamed(
-        context,
-        isSolo ? HomePage.routeName : (orgId == null ? OrgModeGate.routeName : HomePage.routeName),
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        HomePage.routeName,
+            (r) => false,
       );
     });
   }
+
+  // ===================== PREFS "SE SOUVENIR" =====================
 
   Future<void> _loadPrefs() async {
     final p = await SharedPreferences.getInstance();
@@ -137,18 +138,28 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
   }
+
+  // ===================== AUTH EMAIL / GOOGLE / INVITÉ =====================
 
   Future<void> _signIn() async {
     if (_emailCtrl.text.isEmpty || _passCtrl.text.isEmpty) {
-      _snack('Veuillez remplir tous les champs.'.tr()); return;
+      _snack('Veuillez remplir tous les champs.'.tr());
+      return;
     }
     try {
       if (_remember) await _savePrefs();
       final cred = await _auth.signInWithEmailAndPassword(
-          email: _emailCtrl.text, password: _passCtrl.text);
-      await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({
+        email: _emailCtrl.text,
+        password: _passCtrl.text,
+      );
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(cred.user!.uid)
+          .set({
         'email': cred.user!.email,
         'lastLoginAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -159,21 +170,30 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _signUp() async {
-    if (_emailCtrl.text.isEmpty || _passCtrl.text.isEmpty || _nameCtrl.text.isEmpty) {
-      _snack('Veuillez remplir tous les champs.'.tr()); return;
+    if (_emailCtrl.text.isEmpty ||
+        _passCtrl.text.isEmpty ||
+        _nameCtrl.text.isEmpty) {
+      _snack('Veuillez remplir tous les champs.'.tr());
+      return;
     }
     try {
       final cred = await _auth.createUserWithEmailAndPassword(
-          email: _emailCtrl.text, password: _passCtrl.text);
-      await FirebaseFirestore.instance.collection('users')
-          .doc(cred.user!.uid).set({
-        'email'    : cred.user!.email,
-        'name'     : _nameCtrl.text,
-        'mode'     : null,
-        'createdAt': FieldValue.serverTimestamp(),
+        email: _emailCtrl.text,
+        password: _passCtrl.text,
+      );
+      // On crée le doc directement en SOLO (gratuit, sans frein)
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(cred.user!.uid)
+          .set({
+        'email'       : cred.user!.email,
+        'name'        : _nameCtrl.text,
+        'mode'        : 'SOLO',
+        'soloSince'   : FieldValue.serverTimestamp(),
+        'currentOrgId': null,
+        'createdAt'   : FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      _snack('Inscription réussie, connectez-vous'.tr());
-      setState(() => _loginMode = true);
+      await _routeAfterAuth(cred.user!); // on part direct au Home
     } on FirebaseAuthException catch (e) {
       _snack(e.message?.tr() ?? e.code);
     }
@@ -183,10 +203,14 @@ class _LoginScreenState extends State<LoginScreen>
     try {
       if (kIsWeb) {
         final authProvider = GoogleAuthProvider();
-        final userCredential = await FirebaseAuth.instance.signInWithPopup(authProvider);
+        final userCredential =
+        await FirebaseAuth.instance.signInWithPopup(authProvider);
         final user = userCredential.user;
         if (user == null) throw 'Google Web Sign-In failed';
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
           'email': user.email,
           'name' : user.displayName,
           'lastLoginAt': FieldValue.serverTimestamp(),
@@ -197,15 +221,20 @@ class _LoginScreenState extends State<LoginScreen>
         if (gUser == null) return;
         final gAuth = await gUser.authentication;
         final cred = GoogleAuthProvider.credential(
-            idToken: gAuth.idToken, accessToken: gAuth.accessToken);
+          idToken: gAuth.idToken,
+          accessToken: gAuth.accessToken,
+        );
         final result = await _auth.signInWithCredential(cred);
-        await FirebaseFirestore.instance.collection('users')
-            .doc(result.user!.uid).set({
-          'email': result.user!.email,
-          'name' : result.user!.displayName,
+        final user = result.user!;
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'email': user.email,
+          'name' : user.displayName,
           'lastLoginAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-        await _routeAfterAuth(result.user!);
+        await _routeAfterAuth(user);
       }
     } catch (e) {
       debugPrint(e.toString());
@@ -216,12 +245,14 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _guestLogin() async {
     try {
       final cred = await _auth.signInAnonymously();
-      await FirebaseFirestore.instance.collection('users')
-          .doc(cred.user!.uid).set({
-        'name'      : 'Invité',
-        'mode'      : 'SOLO',
-        'soloSince' : FieldValue.serverTimestamp(),
-        'createdAt' : FieldValue.serverTimestamp(),
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(cred.user!.uid)
+          .set({
+        'name'        : 'Invité',
+        'mode'        : 'SOLO',
+        'soloSince'   : FieldValue.serverTimestamp(),
+        'createdAt'   : FieldValue.serverTimestamp(),
         'currentOrgId': null,
       }, SetOptions(merge: true));
       await _routeAfterAuth(cred.user!);
@@ -230,15 +261,8 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Future<void> _goBack() async {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      Navigator.of(context).pushReplacementNamed(OrgModeGate.routeName);
-    }
-  }
-
   // ---------- UI helpers ----------
+
   Widget _langFlag(String code, String asset) {
     return PressableScale(
       onTap: () => context.setLocale(Locale(code)),
@@ -246,10 +270,21 @@ class _LoginScreenState extends State<LoginScreen>
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0,2))],
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            )
+          ],
         ),
         padding: const EdgeInsets.all(4),
-        child: Image.asset(asset, width: 30, height: 22, fit: BoxFit.cover),
+        child: Image.asset(
+          asset,
+          width: 30,
+          height: 22,
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }
@@ -260,14 +295,23 @@ class _LoginScreenState extends State<LoginScreen>
     IconData? icon,
     List<Color>? colors,
   }) {
-    final grad = colors ?? [const Color(0xFF003283), const Color(0xFFE3DEFA)];
+    final grad = colors ?? [
+      const Color(0xFF003283),
+      const Color(0xFFE3DEFA),
+    ];
     return PressableScale(
       onTap: onPressed,
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: grad),
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: grad.last.withOpacity(.3), blurRadius: 12, offset: const Offset(0,6))],
+          boxShadow: [
+            BoxShadow(
+              color: grad.last.withOpacity(.3),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: SizedBox(
           height: 52,
@@ -279,7 +323,13 @@ class _LoginScreenState extends State<LoginScreen>
                   Icon(icon, color: Colors.white),
                   const SizedBox(width: 8),
                 ],
-                Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ),
@@ -314,7 +364,10 @@ class _LoginScreenState extends State<LoginScreen>
                   child: Text(
                     'Déjà un compte',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -335,7 +388,10 @@ class _LoginScreenState extends State<LoginScreen>
                   child: Text(
                     "S'inscrire",
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -347,6 +403,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   // ---------- Build ----------
+
   @override
   Widget build(BuildContext context) {
     final theme     = context.watch<ThemeProvider>().currentTheme;
@@ -356,17 +413,21 @@ class _LoginScreenState extends State<LoginScreen>
     final isDesktop = size.width >= 1024;
     final maxW      = isDesktop ? 900.0 : (isTablet ? 720.0 : 560.0);
 
-    final s  = math.sin(_logoT.value * math.pi * 2);
-    final dy = s * 8;
-    final rot = s * .05;
-    final scale = 1.0 + (s * 0.02);
+    final s      = math.sin(_logoT.value * math.pi * 2);
+    final dy     = s * 8;
+    final rot    = s * .05;
+    final scale  = 1.0 + (s * 0.02);
     final double titleSize = isTablet ? 44 : 38;
 
     return Theme(
       data: theme,
       child: BrandBackground(
-        gradientColors: const [Color(0xFFB1CFEC), Color(0xFF003283), Color(0xFFC7AFF1)],
-        blurSigma: 18,
+        gradientColors: const [
+          Color(0xFFB1CFEC),
+          Color(0xFF003283),
+          Color(0xFFC7AFF1),
+        ],
+        blurSigma: 14, // légèrement moins flou mais plus lisible
         animate: true,
         child: Scaffold(
           backgroundColor: Colors.transparent,
@@ -374,11 +435,7 @@ class _LoginScreenState extends State<LoginScreen>
             backgroundColor: Colors.transparent,
             elevation: 0,
             centerTitle: true,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
-              onPressed: _goBack, // ✅ retour vers la première page
-              tooltip: 'Retour',
-            ),
+            automaticallyImplyLeading: false, // ✅ plus de flèche retour
             title: const Text('Bienvenue'),
           ),
           body: SafeArea(
@@ -390,7 +447,8 @@ class _LoginScreenState extends State<LoginScreen>
                   padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                   child: FrostedCard(
                     radius: 28,
-                    surfaceColor: Colors.white.withOpacity(.15),
+                    // ✅ cadre moins transparent → fond plus opaque
+                    surfaceColor: Colors.white.withOpacity(.32),
                     padding: const EdgeInsets.all(22),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -416,7 +474,9 @@ class _LoginScreenState extends State<LoginScreen>
                                   height: 12,
                                   margin: const EdgeInsets.only(top: 6),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(.15 - .05 * s.abs()),
+                                    color: Colors.black.withOpacity(
+                                      .15 - .05 * s.abs(),
+                                    ),
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                 ),
@@ -443,19 +503,30 @@ class _LoginScreenState extends State<LoginScreen>
                         ShaderMask(
                           shaderCallback: (Rect bounds) {
                             return const LinearGradient(
-                              colors: [Color(0xD2FFFFFF), Color(0xFF003283)],
+                              colors: [
+                                Color(0xD2FFFFFF),
+                                Color(0xFF003283),
+                              ],
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
                             ).createShader(bounds);
                           },
                           child: Text(
-                            _loginMode ? 'Connexion'.tr() : 'Créer un compte'.tr(),
+                            _loginMode
+                                ? 'Connexion'.tr()
+                                : 'Créer un compte'.tr(),
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: titleSize,
                               fontWeight: FontWeight.w900,
                               color: Colors.white,
-                              shadows: const [Shadow(blurRadius: 8, offset: Offset(0,2), color: Colors.black38)],
+                              shadows: const [
+                                Shadow(
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
+                                  color: Colors.black38,
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -472,7 +543,10 @@ class _LoginScreenState extends State<LoginScreen>
                               begin: const Offset(0.05, 0),
                               end: Offset.zero,
                             ).animate(anim),
-                            child: FadeTransition(opacity: anim, child: child),
+                            child: FadeTransition(
+                              opacity: anim,
+                              child: child,
+                            ),
                           ),
                           child: _loginMode
                               ? _SigninForm(
@@ -480,8 +554,11 @@ class _LoginScreenState extends State<LoginScreen>
                             passCtrl: _passCtrl,
                             obscured: _obscured,
                             remember: _remember,
-                            onToggleObscure: () => setState(() => _obscured = !_obscured),
-                            onRememberChanged: (v) => setState(() => _remember = v),
+                            onToggleObscure: () => setState(
+                                  () => _obscured = !_obscured,
+                            ),
+                            onRememberChanged: (v) =>
+                                setState(() => _remember = v),
                             onSubmit: _signIn,
                             onGoogle: _googleLogin,
                             onGuest: _guestLogin,
@@ -492,14 +569,20 @@ class _LoginScreenState extends State<LoginScreen>
                             emailCtrl: _emailCtrl,
                             passCtrl: _passCtrl,
                             obscured: _obscured,
-                            onToggleObscure: () => setState(() => _obscured = !_obscured),
+                            onToggleObscure: () => setState(
+                                  () => _obscured = !_obscured,
+                            ),
                             onSubmit: _signUp,
                             gradientButton: _gradientButton,
                           ),
                         ),
 
                         const SizedBox(height: 16),
-                        Text('© 2025 AI-NEGO — RGPD', style: theme.textTheme.bodySmall, textAlign: TextAlign.center),
+                        Text(
+                          '© 2025 AI-NEGO — RGPD',
+                          style: theme.textTheme.bodySmall,
+                          textAlign: TextAlign.center,
+                        ),
                       ],
                     ),
                   ),
@@ -525,7 +608,12 @@ class _SigninForm extends StatelessWidget {
   final VoidCallback onSubmit;
   final VoidCallback onGoogle;
   final VoidCallback onGuest;
-  final Widget Function({required String label, required VoidCallback onPressed, IconData? icon, List<Color>? colors}) gradientButton;
+  final Widget Function({
+  required String label,
+  required VoidCallback onPressed,
+  IconData? icon,
+  List<Color>? colors,
+  }) gradientButton;
 
   const _SigninForm({
     Key? key,
@@ -550,6 +638,7 @@ class _SigninForm extends StatelessWidget {
         TextField(
           controller: emailCtrl,
           textAlign: TextAlign.center, // texte centré
+          keyboardType: TextInputType.emailAddress,
           decoration: const InputDecoration(
             label: Center(child: Text('Email')),
             prefixIcon: Icon(Icons.email),
@@ -561,7 +650,7 @@ class _SigninForm extends StatelessWidget {
           obscureText: obscured,
           textAlign: TextAlign.center, // texte centré
           decoration: InputDecoration(
-            label: Center(child: Text('Mot de passe')),
+            label: const Center(child: Text('Mot de passe')),
             prefixIcon: const Icon(Icons.lock),
             suffixIcon: IconButton(
               icon: Icon(obscured ? Icons.visibility : Icons.visibility_off),
@@ -587,7 +676,10 @@ class _SigninForm extends StatelessWidget {
           child: gradientButton(
             label: 'Se connecter',
             icon: Icons.login,
-            colors: const [Color(0xFF003283), Color(0xFF6DA6FF)],
+            colors: const [
+              Color(0xFF003283),
+              Color(0xFF6DA6FF),
+            ],
             onPressed: onSubmit,
           ),
         ),
@@ -598,7 +690,10 @@ class _SigninForm extends StatelessWidget {
             Expanded(child: Divider(color: Colors.white30)),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Text('ou', style: TextStyle(color: Colors.white70)),
+              child: Text(
+                'ou',
+                style: TextStyle(color: Colors.white70),
+              ),
             ),
             Expanded(child: Divider(color: Colors.white30)),
           ],
@@ -613,9 +708,16 @@ class _SigninForm extends StatelessWidget {
               foregroundColor: Colors.black,
               backgroundColor: Colors.white,
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
-            icon: SvgPicture.asset('assets/icons/Google.svg', width: 22, height: 22, color: Colors.black),
+            icon: SvgPicture.asset(
+              'assets/icons/Google.svg',
+              width: 22,
+              height: 22,
+              color: Colors.black,
+            ),
             label: const Text('Continuer avec Google'),
             onPressed: onGoogle,
           ),
@@ -629,7 +731,10 @@ class _SigninForm extends StatelessWidget {
           child: gradientButton(
             label: 'Continuer en invité',
             icon: Icons.person_outline,
-            colors: const [Color(0xFF00A3B4), Color(0xFF84E8F0)],
+            colors: const [
+              Color(0xFF00A3B4),
+              Color(0xFF84E8F0),
+            ],
             onPressed: onGuest,
           ),
         ),
@@ -645,7 +750,12 @@ class _SignupForm extends StatelessWidget {
   final bool obscured;
   final VoidCallback onToggleObscure;
   final VoidCallback onSubmit;
-  final Widget Function({required String label, required VoidCallback onPressed, IconData? icon, List<Color>? colors}) gradientButton;
+  final Widget Function({
+  required String label,
+  required VoidCallback onPressed,
+  IconData? icon,
+  List<Color>? colors,
+  }) gradientButton;
 
   const _SignupForm({
     Key? key,
@@ -675,6 +785,7 @@ class _SignupForm extends StatelessWidget {
         TextField(
           controller: emailCtrl,
           textAlign: TextAlign.center,
+          keyboardType: TextInputType.emailAddress,
           decoration: const InputDecoration(
             label: Center(child: Text('Email')),
             prefixIcon: Icon(Icons.email),
@@ -700,7 +811,10 @@ class _SignupForm extends StatelessWidget {
           child: gradientButton(
             label: "S'inscrire",
             icon: Icons.person_add,
-            colors: const [Color(0xFF7B61FF), Color(0xFFD2C5FF)],
+            colors: const [
+              Color(0xFF7B61FF),
+              Color(0xFFD2C5FF),
+            ],
             onPressed: onSubmit,
           ),
         ),
