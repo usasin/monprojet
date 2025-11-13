@@ -22,6 +22,10 @@ import '../widgets/brand_background.dart';
 // micro-interaction
 import '../ui/bling.dart';
 
+// Pages
+import 'home_page.dart';
+import 'map_page.dart';
+
 class SelectProspectsPage extends StatefulWidget {
   static const routeName = '/select';
   const SelectProspectsPage({Key? key}) : super(key: key);
@@ -45,8 +49,10 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
   List<Prospect>       _options    = [];
   final Set<String>    _chosen     = {};
 
-  // État & AdMob
+  // État, filtres & AdMob
   bool _loading = false;
+  bool _dirty   = false; // <- des modifications non enregistrées ?
+  bool _showOnlyChosen = false;
   BannerAd? _bannerAd;
   bool _isBannerLoaded = false;
 
@@ -55,7 +61,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
   @override
   void initState() {
     super.initState();
-    _loadForDate();
+    _loadForDate();    // ➜ affiche directement ce qui est déjà enregistré pour "aujourd'hui"
     _loadBannerAd();
   }
 
@@ -79,48 +85,153 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
     )..load();
   }
 
-  /// Charge les IDs cochés pour la date sélectionnée
+  // -------- helpers d’affichage --------
+
+  void _sortByNumber() {
+    final numRx = RegExp(r'^(\d+)\s');
+    _allOptions.sort((a, b) {
+      final na = int.tryParse(numRx.firstMatch(a.address)?.group(1) ?? '') ?? 1000000000;
+      final nb = int.tryParse(numRx.firstMatch(b.address)?.group(1) ?? '') ?? 1000000000;
+      return _asc ? na.compareTo(nb) : nb.compareTo(na);
+    });
+  }
+
+  void _rebuildOptions({bool resetCount = false}) {
+    // Filtre "seulement cochés" côté UI
+    final list = _showOnlyChosen
+        ? _allOptions.where((p) => _chosen.contains(p.id)).toList()
+        : List<Prospect>.from(_allOptions);
+    if (resetCount) {
+      _loadedCount = min(_pageSize, list.length);
+    } else {
+      _loadedCount = min(_loadedCount, list.length);
+    }
+    _options = list.sublist(0, _loadedCount);
+  }
+
+  // -------- chargement par date (avec affichage direct) --------
+
+  /// Charge les IDs cochés + récupère leurs fiches pour **afficher directement** la liste enregistrée.
   Future<void> _loadForDate() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _allOptions.clear();
+      _options.clear();
+      _loadedCount = 0;
+    });
     try {
       final data = await FirestoreService().loadPlanData(_selectedDate);
       final ids  = List<String>.from(data['prospectIds'] ?? []);
+
       _chosen
         ..clear()
         ..addAll(ids);
+
+      if (ids.isNotEmpty) {
+        // Récupère les prospects pour les afficher tout de suite
+        final saved = await FirestoreService().fetchProspectsByIds(ids);
+        _allOptions
+          ..clear()
+          ..addAll(saved);
+        _sortByNumber();
+        _rebuildOptions(resetCount: true);
+      } else {
+        // Rien pour cette date -> reste vide (invitation à charger)
+        _allOptions.clear();
+        _options.clear();
+        _loadedCount = 0;
+      }
+
+      _dirty = false; // on vient d’ouvrir l’état enregistré pour cette date
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  /// Sauvegarde le plan en Firestore
+  /// Sauvegarde le plan en Firestore (MANUELLE) + choix navigation
   Future<void> _onSave() async {
-    await FirestoreService().savePlan(_selectedDate, _chosen.toList(), _allOptions);
+    await FirestoreService().savePlan(
+      _selectedDate,
+      _chosen.toList(),
+      _allOptions,
+    );
+
     if (!mounted) return;
+
+    setState(() => _dirty = false);
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Plan sauvegardé'.tr()),
-        content: Text('Le plan du {0} a été mis à jour avec succès.'.tr(
-          args: [DateFormat.yMd().format(_selectedDate)],
-        )),
+        content: Text(
+          'Le plan du {0} a été mis à jour avec succès.'.tr(
+            args: [DateFormat.yMd().format(_selectedDate)],
+          ),
+        ),
         actions: [
+          // 👉 Rester sur cette page pour continuer à cocher
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text('Continuer la sélection'.tr()),
           ),
+
+          // 👉 Aller à la carte
           FilledButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              Navigator.of(context).pushNamed('/map'); // Vers map_page.dart
+              Navigator.of(context).pushNamed(MapPage.routeName);
+              // ou : Navigator.of(context).pushNamed('/map');
             },
             child: Text('Aller à la carte'.tr()),
+          ),
+
+          // 👉 Retour à l’accueil (HomePage)
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              Navigator.of(context).pushNamedAndRemoveUntil(
+                HomePage.routeName,
+                (route) => false,
+              );
+            },
+            child: Text("Retour à l'accueil".tr()),
           ),
         ],
       ),
     );
   }
+
+  /// Avant de changer de date: si _dirty, proposer d’enregistrer / ignorer / annuler
+  Future<bool> _confirmSwitchDate() async {
+    if (!_dirty) return true;
+    return await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Modifications non enregistrées'.tr()),
+        content: Text("Voulez-vous enregistrer les changements avant de changer de date ?".tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false), // ignorer
+            child: Text('Ignorer'.tr()),
+          ),
+          TextButton(
+            onPressed: () async {
+              await FirestoreService().savePlan(_selectedDate, _chosen.toList(), _allOptions);
+              if (ctx.mounted) Navigator.of(ctx).pop(true); // après save
+            },
+            child: Text('Enregistrer'.tr()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null), // annuler
+            child: Text('Annuler'.tr()),
+          ),
+        ],
+      ),
+    ).then((v) => v == null ? false : true);
+  }
+
+  // -------- Google Places --------
 
   /// Récupère jusqu’à 3 pages de résultats Places TextSearch
   Future<List<Map<String, dynamic>>> _fetchAllPages(Uri firstPage) async {
@@ -157,6 +268,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
       _allOptions.clear();
       _options.clear();
       _loadedCount = 0;
+      // _chosen NE DOIT PAS ÊTRE EFFACÉ : il est lié à la date en cours
     });
 
     try {
@@ -200,19 +312,17 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
         }
       }
 
-      // 3) Ré-intègre les anciens cochés hors résultat
+      // 3) Ré-intègre les anciens cochés (de la même date) qui ne sont pas dans la page
       final missing = _chosen.where((id) => !_allOptions.any((p) => p.id == id));
       if (missing.isNotEmpty) {
         final existing = await FirestoreService().fetchProspectsByIds(missing.toList());
         _allOptions.addAll(existing);
       }
 
-      // tri et pagination
       _sortByNumber();
-      _loadedCount = min(_pageSize, _allOptions.length);
-      _options     = _allOptions.sublist(0, _loadedCount);
+      _rebuildOptions(resetCount: true);
 
-      // ✅ pas de .tr() sur la chaîne dynamique pour éviter "key not found"
+      // Feedback
       final total = _allOptions.length;
       final isFr  = context.locale.languageCode.startsWith('fr');
       final word  = isFr ? (total <= 1 ? 'résultat' : 'résultats')
@@ -232,16 +342,11 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
     }
   }
 
-  void _sortByNumber() {
-    final numRx = RegExp(r'^(\d+)\s');
-    _allOptions.sort((a, b) {
-      final na = int.tryParse(numRx.firstMatch(a.address)?.group(1) ?? '') ?? 1000000000;
-      final nb = int.tryParse(numRx.firstMatch(b.address)?.group(1) ?? '') ?? 1000000000;
-      return _asc ? na.compareTo(nb) : nb.compareTo(na);
-    });
-  }
-
   Future<void> _pickDate() async {
+    // si modifs non enregistrées, on propose d'abord
+    final canSwitch = await _confirmSwitchDate();
+    if (!canSwitch) return;
+
     final d = await showDatePicker(
       context    : context,
       initialDate: _selectedDate,
@@ -249,8 +354,14 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
       lastDate   : DateTime.now().add(const Duration(days: 30)),
     );
     if (d != null) {
-      setState(() => _selectedDate = d);
-      await _loadForDate();
+      setState(() {
+        _selectedDate = d;
+        _allOptions.clear();
+        _options.clear();
+        _loadedCount = 0;
+        _showOnlyChosen = false; // on repart en vue complète
+      });
+      await _loadForDate(); // ➜ affiche directement les éléments déjà enregistrés pour cette date
     }
   }
 
@@ -286,6 +397,45 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
     );
   }
 
+  // ░░░ Correctif overflow : Wrap responsive ░░░
+  Widget _unsavedBanner(ThemeData theme) {
+    final cs = theme.colorScheme;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      child: _dirty
+          ? Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            Icon(Icons.info_rounded, color: cs.primary, size: 18),
+            Text(
+              'Modifications non enregistrées',
+              style: TextStyle(color: cs.onSurfaceVariant),
+              softWrap: true,
+            ),
+            SizedBox(
+              height: 32,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+                onPressed: _onSave,
+                icon: const Icon(Icons.save_rounded, size: 18),
+                label: Text('Enregistrer'.tr()),
+              ),
+            ),
+          ],
+        ),
+      )
+          : const SizedBox.shrink(key: ValueKey('clean')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeProvider>().currentTheme;
@@ -312,6 +462,11 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
                 style: const TextStyle(fontWeight: FontWeight.w800)),
             centerTitle: true,
             actions: [
+              IconButton(
+                icon: const Icon(Icons.save_rounded),
+                tooltip: 'Enregistrer'.tr(),
+                onPressed: _onSave,
+              ),
               IconButton(
                 icon: Icon(theme.brightness == Brightness.dark ? Icons.light_mode : Icons.dark_mode),
                 onPressed: () => context.read<ThemeProvider>().toggleTheme(),
@@ -385,7 +540,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
                     // ── Invitation
                     if (!_loading && _allOptions.isEmpty)
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 32),
+                        padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Text(
                           'Appuie sur “Charger” pour lancer la recherche.'.tr(),
                           textAlign: TextAlign.center,
@@ -393,7 +548,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
                         ),
                       ),
 
-                    // ── Pagination / Tri / Tout sélectionner
+                    // ── Pagination / Tri / Tout sélectionner + bannière "non enregistré" + filtre cochés
                     if (!_loading && _allOptions.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       Card(
@@ -401,34 +556,50 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: _PaginationBar(
-                            pageSize: _pageSize,
-                            asc: _asc,
-                            chosen: _chosen.length,
-                            total: _allOptions.length,
-                            onPageSize: (n) {
-                              if (n == null) return;
-                              setState(() {
-                                _pageSize    = n;
-                                _loadedCount = min(n, _allOptions.length);
-                                _options     = _allOptions.sublist(0, _loadedCount);
-                              });
-                            },
-                            onToggleSort: () => setState(() {
-                              _asc = !_asc;
-                              _sortByNumber();
-                              _loadedCount = min(_pageSize, _allOptions.length);
-                              _options     = _allOptions.sublist(0, _loadedCount);
-                            }),
-                            onToggleSelectAll: () => setState(() {
-                              if (_chosen.length == _allOptions.length) {
-                                _chosen.clear();
-                              } else {
-                                _chosen
-                                  ..clear()
-                                  ..addAll(_allOptions.map((p) => p.id));
-                              }
-                            }),
+                          child: Column(
+                            children: [
+                              _PaginationBar(
+                                pageSize: _pageSize,
+                                asc: _asc,
+                                chosen: _chosen.length,
+                                total: _allOptions.length,
+                                onPageSize: (n) {
+                                  if (n == null) return;
+                                  setState(() {
+                                    _pageSize    = n;
+                                    _rebuildOptions(resetCount: true);
+                                  });
+                                },
+                                onToggleSort: () => setState(() {
+                                  _asc = !_asc;
+                                  _sortByNumber();
+                                  _rebuildOptions(resetCount: true);
+                                }),
+                                onToggleSelectAll: () => setState(() {
+                                  if (_chosen.length == _allOptions.length) {
+                                    _chosen.clear();
+                                  } else {
+                                    _chosen
+                                      ..clear()
+                                      ..addAll(_allOptions.map((p) => p.id));
+                                  }
+                                  _dirty = true;
+                                }),
+                              ),
+                              // Filtre "seulement cochés"
+                              SwitchListTile.adaptive(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text('Afficher seulement cochés'.tr()),
+                                value: _showOnlyChosen,
+                                onChanged: (v) => setState(() {
+                                  _showOnlyChosen = v;
+                                  _rebuildOptions(resetCount: true);
+                                }),
+                              ),
+                              const SizedBox(height: 6),
+                              _unsavedBanner(theme),
+                            ],
                           ),
                         ),
                       ),
@@ -466,6 +637,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
                               ),
                               onChanged  : (ok) => setState(() {
                                 ok == true ? _chosen.add(p.id) : _chosen.remove(p.id);
+                                _dirty = true; // marquer comme modifié
                               }),
                             );
                           },
@@ -473,15 +645,17 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
                       ),
 
                     // ── Charger plus
-                    if (!_loading && _loadedCount < _allOptions.length)
+                    if (!_loading && _options.length < (_showOnlyChosen
+                        ? _allOptions.where((p) => _chosen.contains(p.id)).length
+                        : _allOptions.length))
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         child: _primaryGradientButton(
                           label: 'Charger $_pageSize de plus',
                           icon: Icons.keyboard_arrow_down_rounded,
                           onPressed: () => setState(() {
-                            _loadedCount = min(_loadedCount + _pageSize, _allOptions.length);
-                            _options     = _allOptions.sublist(0, _loadedCount);
+                            _loadedCount = _loadedCount + _pageSize;
+                            _rebuildOptions();
                           }),
                         ),
                       ),
@@ -491,12 +665,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage> {
             ),
           ),
 
-          floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: _onSave,
-            icon: const Icon(Icons.save_rounded),
-            label: Text('Enregistrer'.tr()),
-          ),
+
         ),
       ),
     );
