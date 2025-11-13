@@ -1,10 +1,11 @@
 // lib/pages/login_screen.dart
 // ------------------------------------------------------------
 // Login modernisé (fond clair/bleuté) avec "onglets" sur la même page.
-// - Onglet "Déjà un compte" : Email/MDP + Se souvenir + Google + Invité
+// - Onglet "Déjà un compte" : Email/MDP + Se souvenir + Invité
 // - Onglet "S'inscrire"    : Nom + Email + MDP
 // - MODE SOLO FORCÉ : après auth → HomePage, sans aucun frein
 // - PLUS DE PREMIÈRE PAGE "CHOISIR LE MODE" : cette page est autonome
+// - Google Sign-In SUPPRIMÉ (imports, code et UI)
 // ------------------------------------------------------------
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
@@ -15,9 +16,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../logo_widget.dart';
 import '../providers/theme_provider.dart';
@@ -38,7 +37,6 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final _auth = FirebaseAuth.instance;
-  final _google = GoogleSignIn();
 
   final _emailCtrl = TextEditingController();
   final _passCtrl  = TextEditingController();
@@ -97,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen>
     if (!mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil(
       HomePage.routeName,
-          (r) => false,
+      (r) => false,
     );
   }
 
@@ -110,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Navigator.of(context).pushNamedAndRemoveUntil(
         HomePage.routeName,
-            (r) => false,
+        (r) => false,
       );
     });
   }
@@ -143,7 +141,7 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // ===================== AUTH EMAIL / GOOGLE / INVITÉ =====================
+  // ===================== AUTH EMAIL / INVITÉ =====================
 
   Future<void> _signIn() async {
     if (_emailCtrl.text.isEmpty || _passCtrl.text.isEmpty) {
@@ -153,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen>
     try {
       if (_remember) await _savePrefs();
       final cred = await _auth.signInWithEmailAndPassword(
-        email: _emailCtrl.text,
+        email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
       );
       await FirebaseFirestore.instance
@@ -178,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen>
     }
     try {
       final cred = await _auth.createUserWithEmailAndPassword(
-        email: _emailCtrl.text,
+        email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
       );
       // On crée le doc directement en SOLO (gratuit, sans frein)
@@ -187,7 +185,7 @@ class _LoginScreenState extends State<LoginScreen>
           .doc(cred.user!.uid)
           .set({
         'email'       : cred.user!.email,
-        'name'        : _nameCtrl.text,
+        'name'        : _nameCtrl.text.trim(),
         'mode'        : 'SOLO',
         'soloSince'   : FieldValue.serverTimestamp(),
         'currentOrgId': null,
@@ -196,49 +194,6 @@ class _LoginScreenState extends State<LoginScreen>
       await _routeAfterAuth(cred.user!); // on part direct au Home
     } on FirebaseAuthException catch (e) {
       _snack(e.message?.tr() ?? e.code);
-    }
-  }
-
-  Future<void> _googleLogin() async {
-    try {
-      if (kIsWeb) {
-        final authProvider = GoogleAuthProvider();
-        final userCredential =
-        await FirebaseAuth.instance.signInWithPopup(authProvider);
-        final user = userCredential.user;
-        if (user == null) throw 'Google Web Sign-In failed';
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .set({
-          'email': user.email,
-          'name' : user.displayName,
-          'lastLoginAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-        await _routeAfterAuth(user);
-      } else {
-        final gUser = await _google.signIn();
-        if (gUser == null) return;
-        final gAuth = await gUser.authentication;
-        final cred = GoogleAuthProvider.credential(
-          idToken: gAuth.idToken,
-          accessToken: gAuth.accessToken,
-        );
-        final result = await _auth.signInWithCredential(cred);
-        final user = result.user!;
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .set({
-          'email': user.email,
-          'name' : user.displayName,
-          'lastLoginAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-        await _routeAfterAuth(user);
-      }
-    } catch (e) {
-      debugPrint(e.toString());
-      _snack('Erreur Google Sign-In'.tr());
     }
   }
 
@@ -427,7 +382,7 @@ class _LoginScreenState extends State<LoginScreen>
           Color(0xFF003283),
           Color(0xFFC7AFF1),
         ],
-        blurSigma: 14, // légèrement moins flou mais plus lisible
+        blurSigma: 14,
         animate: true,
         child: Scaffold(
           backgroundColor: Colors.transparent,
@@ -435,7 +390,7 @@ class _LoginScreenState extends State<LoginScreen>
             backgroundColor: Colors.transparent,
             elevation: 0,
             centerTitle: true,
-            automaticallyImplyLeading: false, // ✅ plus de flèche retour
+            automaticallyImplyLeading: false,
             title: const Text('Bienvenue'),
           ),
           body: SafeArea(
@@ -447,7 +402,6 @@ class _LoginScreenState extends State<LoginScreen>
                   padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                   child: FrostedCard(
                     radius: 28,
-                    // ✅ cadre moins transparent → fond plus opaque
                     surfaceColor: Colors.white.withOpacity(.32),
                     padding: const EdgeInsets.all(22),
                     child: Column(
@@ -496,7 +450,7 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
 
                         const SizedBox(height: 14),
-                        _authPills(), // ✅ switch Déjà un compte / S'inscrire
+                        _authPills(),
 
                         const SizedBox(height: 18),
                         // Titre centré
@@ -533,7 +487,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                         const SizedBox(height: 20),
 
-                        // Champs spécifiques (AnimatedSwitcher = "slide")
+                        // Formulaires
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 220),
                           switchInCurve: Curves.easeOut,
@@ -550,31 +504,28 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           child: _loginMode
                               ? _SigninForm(
-                            emailCtrl: _emailCtrl,
-                            passCtrl: _passCtrl,
-                            obscured: _obscured,
-                            remember: _remember,
-                            onToggleObscure: () => setState(
-                                  () => _obscured = !_obscured,
-                            ),
-                            onRememberChanged: (v) =>
-                                setState(() => _remember = v),
-                            onSubmit: _signIn,
-                            onGoogle: _googleLogin,
-                            onGuest: _guestLogin,
-                            gradientButton: _gradientButton,
-                          )
+                                  emailCtrl: _emailCtrl,
+                                  passCtrl: _passCtrl,
+                                  obscured: _obscured,
+                                  remember: _remember,
+                                  onToggleObscure: () =>
+                                      setState(() => _obscured = !_obscured),
+                                  onRememberChanged: (v) =>
+                                      setState(() => _remember = v),
+                                  onSubmit: _signIn,
+                                  onGuest: _guestLogin,
+                                  gradientButton: _gradientButton,
+                                )
                               : _SignupForm(
-                            nameCtrl: _nameCtrl,
-                            emailCtrl: _emailCtrl,
-                            passCtrl: _passCtrl,
-                            obscured: _obscured,
-                            onToggleObscure: () => setState(
-                                  () => _obscured = !_obscured,
-                            ),
-                            onSubmit: _signUp,
-                            gradientButton: _gradientButton,
-                          ),
+                                  nameCtrl: _nameCtrl,
+                                  emailCtrl: _emailCtrl,
+                                  passCtrl: _passCtrl,
+                                  obscured: _obscured,
+                                  onToggleObscure: () =>
+                                      setState(() => _obscured = !_obscured),
+                                  onSubmit: _signUp,
+                                  gradientButton: _gradientButton,
+                                ),
                         ),
 
                         const SizedBox(height: 16),
@@ -606,13 +557,12 @@ class _SigninForm extends StatelessWidget {
   final VoidCallback onToggleObscure;
   final ValueChanged<bool> onRememberChanged;
   final VoidCallback onSubmit;
-  final VoidCallback onGoogle;
   final VoidCallback onGuest;
   final Widget Function({
-  required String label,
-  required VoidCallback onPressed,
-  IconData? icon,
-  List<Color>? colors,
+    required String label,
+    required VoidCallback onPressed,
+    IconData? icon,
+    List<Color>? colors,
   }) gradientButton;
 
   const _SigninForm({
@@ -624,7 +574,6 @@ class _SigninForm extends StatelessWidget {
     required this.onToggleObscure,
     required this.onRememberChanged,
     required this.onSubmit,
-    required this.onGoogle,
     required this.onGuest,
     required this.gradientButton,
   }) : super(key: key);
@@ -637,7 +586,7 @@ class _SigninForm extends StatelessWidget {
       children: [
         TextField(
           controller: emailCtrl,
-          textAlign: TextAlign.center, // texte centré
+          textAlign: TextAlign.center,
           keyboardType: TextInputType.emailAddress,
           decoration: const InputDecoration(
             label: Center(child: Text('Email')),
@@ -648,7 +597,7 @@ class _SigninForm extends StatelessWidget {
         TextField(
           controller: passCtrl,
           obscureText: obscured,
-          textAlign: TextAlign.center, // texte centré
+          textAlign: TextAlign.center,
           decoration: InputDecoration(
             label: const Center(child: Text('Mot de passe')),
             prefixIcon: const Icon(Icons.lock),
@@ -684,46 +633,7 @@ class _SigninForm extends StatelessWidget {
           ),
         ),
 
-        const SizedBox(height: 10),
-        Row(
-          children: const [
-            Expanded(child: Divider(color: Colors.white30)),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                'ou',
-                style: TextStyle(color: Colors.white70),
-              ),
-            ),
-            Expanded(child: Divider(color: Colors.white30)),
-          ],
-        ),
-        const SizedBox(height: 10),
-
-        // Google
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              foregroundColor: Colors.black,
-              backgroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            icon: SvgPicture.asset(
-              'assets/icons/Google.svg',
-              width: 22,
-              height: 22,
-              color: Colors.black,
-            ),
-            label: const Text('Continuer avec Google'),
-            onPressed: onGoogle,
-          ),
-        ),
-
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
 
         // Invité (couleurs différentes)
         SizedBox(
@@ -751,10 +661,10 @@ class _SignupForm extends StatelessWidget {
   final VoidCallback onToggleObscure;
   final VoidCallback onSubmit;
   final Widget Function({
-  required String label,
-  required VoidCallback onPressed,
-  IconData? icon,
-  List<Color>? colors,
+    required String label,
+    required VoidCallback onPressed,
+    IconData? icon,
+    List<Color>? colors,
   }) gradientButton;
 
   const _SignupForm({
