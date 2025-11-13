@@ -25,7 +25,7 @@ import 'pages/prospect_form_page.dart';
 import 'pages/prospects_finished_page.dart';
 import 'pages/settings_screen.dart';
 
-// Entreprise
+// Entreprise (toujours dispo mais plus au démarrage)
 import 'pages/org_mode_gate.dart';
 import 'pages/org_create_screen.dart';
 import 'pages/org_join_screen.dart';
@@ -71,42 +71,44 @@ class MyApp extends StatelessWidget {
       supportedLocales: context.supportedLocales,
       locale: context.locale,
 
-      // 👉 On démarre sur le choix de mode (pas sur Login)
-      initialRoute: OrgModeGate.routeName,
+      // 👉 On démarre maintenant DIRECTEMENT sur la page de login
+      initialRoute: LoginScreen.routeName,
 
       routes: {
         // Auth + Home
-        LoginScreen.routeName            : (_) => const LoginScreen(),
-        HomePage.routeName               : (_) => const HomePage(),
+        LoginScreen.routeName             : (_) => const LoginScreen(),
+        HomePage.routeName                : (_) => const HomePage(),
 
         // Prospection
-        SelectProspectsPage.routeName    : (_) => const SelectProspectsPage(),
-        ReportingPage.routeName          : (_) => const ReportingPage(),
-        MapPage.routeName                : (_) => const MapPage(),
+        SelectProspectsPage.routeName     : (_) => const SelectProspectsPage(),
+        ReportingPage.routeName           : (_) => const ReportingPage(),
+        MapPage.routeName                 : (_) => const MapPage(),
 
         // Infos
-        AboutScreen.routeName            : (_) => const AboutScreen(),
-        InformationScreen.routeName      : (_) => const InformationScreen(),
+        AboutScreen.routeName             : (_) => const AboutScreen(),
+        InformationScreen.routeName       : (_) => const InformationScreen(),
 
         // Historique / détails
         AllProspectsFinishedPage.routeName: (_) => const AllProspectsFinishedPage(),
-        ProspectFormPage.routeName       : (_) => const ProspectFormPage(),
-        ProspectsFinishedPage.routeName  : (ctx) {
+        ProspectFormPage.routeName        : (_) => const ProspectFormPage(),
+        ProspectsFinishedPage.routeName   : (ctx) {
           final date = ModalRoute.of(ctx)!.settings.arguments as DateTime;
           return ProspectsFinishedPage(date: date);
         },
 
         // Réglages
-        SettingsScreen.routeName         : (_) => const SettingsScreen(),
-        BillingScreen.routeName        : (_) => const BillingScreen(), // ✅
-        // Entreprise
-        OrgModeGate.routeName            : (_) => const OrgModeGate(),
-        OrgCreateScreen.routeName        : (_) => const OrgCreateScreen(),
-        OrgJoinScreen.routeName          : (_) => const OrgJoinScreen(),
-        OrgMembersScreen.routeName       : (_) => const OrgMembersScreen(),
+        SettingsScreen.routeName          : (_) => const SettingsScreen(),
+        BillingScreen.routeName           : (_) => const BillingScreen(),
+
+        // Entreprise (toujours présents mais plus utilisés au démarrage)
+        OrgModeGate.routeName             : (_) => const OrgModeGate(),
+        OrgCreateScreen.routeName         : (_) => const OrgCreateScreen(),
+        OrgJoinScreen.routeName           : (_) => const OrgJoinScreen(),
+        OrgMembersScreen.routeName        : (_) => const OrgMembersScreen(),
       },
 
-      onUnknownRoute: (_) => MaterialPageRoute(builder: (_) => const HomePage()),
+      onUnknownRoute: (_) =>
+          MaterialPageRoute(builder: (_) => const HomePage()),
     );
   }
 }
