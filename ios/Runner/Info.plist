@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+
+  <!-- Métadonnées de base -->
   <key>CFBundleDevelopmentRegion</key>
   <string>$(DEVELOPMENT_LANGUAGE)</string>
 
@@ -61,26 +63,33 @@
   <key>UIApplicationSupportsIndirectInputEvents</key>
   <true/>
 
-  <!-- ===== Ajouts requis Prospecto ===== -->
+  <!-- ===== Confidentialité / Pubs / Réseaux ===== -->
 
   <!-- Export compliance (HTTPS/TLS uniquement) -->
   <key>ITSAppUsesNonExemptEncryption</key>
   <false/>
 
-  <!-- ATT (AdMob) -->
+  <!-- App Tracking Transparency (AdMob) -->
   <key>NSUserTrackingUsageDescription</key>
   <string>Votre autorisation nous permet d’afficher des publicités plus pertinentes via AdMob. Aucune donnée n’est vendue.</string>
 
-  <!-- Localisation (utilisation au premier plan) -->
+  <!-- Localisation (premier plan) -->
   <key>NSLocationWhenInUseUsageDescription</key>
   <string>La localisation est utilisée pour optimiser votre itinéraire et planifier vos visites à proximité.</string>
 
-  <!-- ⚠️ AJOUTS pour lever ITMS-90683 -->
+  <!--
+    Si vous avez réellement besoin de la localisation en arrière-plan,
+    décommentez ce bloc ET activez Background Modes > Location updates dans Xcode.
+
   <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-  <string>Prospecto peut accéder à votre position même en arrière-plan pour maintenir l’itinéraire et le reporting à jour durant vos déplacements.</string>
+  <string>Prospecto peut accéder à votre position en arrière-plan pour maintenir l’itinéraire et le reporting à jour.</string>
   <key>NSLocationAlwaysUsageDescription</key>
   <string>Prospecto a besoin d’un accès permanent à la localisation pour suivre vos visites même si l’app n’est pas au premier plan.</string>
-  <!-- /AJOUTS -->
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>location</string>
+  </array>
+  -->
 
   <!-- AdMob App ID -->
   <key>GADApplicationIdentifier</key>
@@ -105,6 +114,10 @@
     <string>google</string>
     <string>com.googleusercontent.apps.163745254135-3q1q92pq15663uc2gkg4nqvfk8jkjdfp</string>
   </array>
+
+  <!-- ===== Google Maps iOS (OBLIGATOIRE pour google_maps_flutter) ===== -->
+  <key>GMSApiKey</key>
+  <string>PASTE_YOUR_IOS_MAPS_KEY</string>
 
 </dict>
 </plist>
