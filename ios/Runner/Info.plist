@@ -117,7 +117,7 @@
 
   <!-- ===== Google Maps iOS (OBLIGATOIRE pour google_maps_flutter) ===== -->
   <key>GMSApiKey</key>
-  <string>PASTE_YOUR_IOS_MAPS_KEY</string>
+  <string>AIzaSyCWE5qSeyBDrZIXWiNrt_-I4GAyQk20F6M</string>
 
 </dict>
 </plist>
