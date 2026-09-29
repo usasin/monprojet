@@ -10,10 +10,10 @@ workflows:
           flutter pub get
       - name: 🛠 Build Android release
         script: |
-          flutter build apk --release
+          flutter build apk --release --dart-define-from-file=config/prod.json
       - name: 🛠 Build iOS IPA
         script: |
-          flutter build ipa --release
+          flutter build ipa --release --dart-define-from-file=config/prod.json
     artifacts:
       - build/app/outputs/flutter-apk/app-release.apk
       - build/ios/ipa/*.ipa

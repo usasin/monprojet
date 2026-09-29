@@ -1,110 +1,75 @@
-// lib/services/org_service.dart
-import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../config.dart'; // kAppId
+import 'package:cloud_functions/cloud_functions.dart';
+
+
+class ActivationPlan {
+  final String code;
+  final String label;
+  final int maxSeats;
+
+  const ActivationPlan({
+    required this.code,
+    required this.label,
+    required this.maxSeats,
+  });
+}
 
 class OrgService {
   final FirebaseFirestore db = FirebaseFirestore.instance;
+  final FirebaseFunctions functions;
   final String appId;
-  OrgService(this.appId);
 
-  DocumentReference<Map<String, dynamic>> orgRef(String orgId) =>
-      db.collection('apps').doc(appId).collection('orgs').doc(orgId);
+  OrgService(this.appId, {FirebaseFunctions? functions})
+      : functions =
+            functions ?? FirebaseFunctions.instanceFor(region: 'europe-west1');
 
-  CollectionReference<Map<String, dynamic>> _orgsCol() =>
-      db.collection('apps').doc(appId).collection('orgs');
+  DocumentReference<Map<String, dynamic>> orgRef(String orgId) => db
+      .collection('apps')
+      .doc(appId)
+      .collection('orgs')
+      .doc(orgId);
 
-  DocumentReference<Map<String, dynamic>> _licenseRef(String code) =>
-      db.collection('apps').doc(appId).collection('orgLicenses').doc(code);
-
-  // ------------------------------
-  // PRECHECK : vérifie la licence
-  // ------------------------------
-  Future<String> precheckActivationCode(String rawCode) async {
+  Future<ActivationPlan> precheckActivationCode(String rawCode) async {
     final code = rawCode.trim().toUpperCase();
     if (code.isEmpty) throw 'Code requis';
-
-    final snap = await _licenseRef(code).get();
-    if (!snap.exists) throw 'Code d’activation introuvable';
-
-    final data = snap.data()!;
-    final bool active = (data['active'] == true);
-    final bool used = (data['used'] == true);
-    final Timestamp? ts = data['expiresAt'] as Timestamp?;
-    final DateTime? expiresAt = ts?.toDate();
-
-    if (!active) throw 'Code inactif';
-    if (used) throw 'Code déjà utilisé';
-    if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
-      throw 'Code expiré';
+    try {
+      final result = await functions
+          .httpsCallable('precheckActivationCode')
+          .call({'appId': appId, 'code': code});
+      final data = Map<String, dynamic>.from(result.data as Map);
+      return ActivationPlan(
+        code: (data['plan'] ?? 'STANDARD').toString(),
+        label: (data['planLabel'] ?? data['plan'] ?? 'Standard').toString(),
+        maxSeats: (data['maxSeats'] as num?)?.toInt() ?? 5,
+      );
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Code d’activation invalide';
     }
-    return (data['plan'] ?? 'STANDARD').toString();
   }
 
-  // ------------------------------
-  // Création AVEC licence
-  // ------------------------------
   Future<Map<String, String>> createOrgWithActivation({
-    required String ownerUid,
-    required String ownerEmail,
     required String name,
     required String activationCode,
   }) async {
-    activationCode = activationCode.trim().toUpperCase();
-    if (activationCode.isEmpty) throw 'Code d’activation requis';
-
-    return await db.runTransaction<Map<String, String>>((tx) async {
-      final licRef = _licenseRef(activationCode);
-      final licSnap = await tx.get(licRef);
-
-      if (!licSnap.exists) throw 'Code d’activation introuvable';
-
-      final data = licSnap.data() as Map<String, dynamic>;
-      final bool active = (data['active'] == true);
-      final bool used = (data['used'] == true);
-      final Timestamp? ts = data['expiresAt'] as Timestamp?;
-      final DateTime? expiresAt = ts?.toDate();
-
-      if (!active) throw 'Code inactif';
-      if (used) throw 'Code déjà utilisé';
-      if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
-        throw 'Code expiré';
-      }
-
-      final plan = data['plan'] ?? 'STANDARD';
-
-      final orgDoc = _orgsCol().doc();
-      tx.set(orgDoc, {
-        'name': name,
-        'ownerUid': ownerUid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'plan': plan,
-        'activatedByCode': activationCode,
+    try {
+      final result = await functions
+          .httpsCallable('createOrgWithActivation')
+          .call({
+        'appId': appId,
+        'name': name.trim(),
+        'activationCode': activationCode.trim().toUpperCase(),
       });
-
-      tx.set(orgDoc.collection('members').doc(ownerUid), {
-        'uid': ownerUid,
-        'role': 'OWNER',
-        'email': ownerEmail,
-        'displayName': ownerEmail,
-        'joinedAt': FieldValue.serverTimestamp(),
-      });
-
-      tx.update(licRef, {
-        'active': false,
-        'used': true,
-        'usedAt': FieldValue.serverTimestamp(),
-        'orgId': orgDoc.id,
-        'usedByUid': ownerUid,
-      });
-
-      return {'orgId': orgDoc.id, 'orgName': name, 'role': 'OWNER'};
-    });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      return {
+        'orgId': data['orgId'].toString(),
+        'orgName': data['orgName'].toString(),
+        'role': data['role'].toString(),
+      };
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Création de l’organisation impossible';
+    }
   }
 
-  // ------------------------------
-  // Invitations (membres)
-  // ------------------------------
   Future<String> createInvite({
     required String orgId,
     String role = 'REP',
@@ -112,21 +77,18 @@ class OrgService {
     String? requesterUid,
     String? requesterEmail,
   }) async {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final rnd = Random();
-    final code = List.generate(6, (_) => chars[rnd.nextInt(chars.length)]).join();
-
-    final inviteRef = orgRef(orgId).collection('invites').doc(code);
-    await inviteRef.set({
-      'role': role,
-      'email': email,
-      'createdAt': FieldValue.serverTimestamp(),
-      'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 7))),
-      'active': true,
-      if (requesterUid != null) 'requesterUid': requesterUid,
-      if (requesterEmail != null) 'requesterEmail': requesterEmail,
-    });
-    return code;
+    try {
+      final result = await functions.httpsCallable('createOrgInvite').call({
+        'appId': appId,
+        'orgId': orgId,
+        'role': role,
+        if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      return data['code'].toString();
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Invitation impossible';
+    }
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> invites(String orgId) {
@@ -135,6 +97,18 @@ class OrgService {
         .where('active', isEqualTo: true)
         .orderBy('createdAt', descending: true)
         .snapshots();
+  }
+
+  Future<void> revokeInvite(String orgId, String code) async {
+    try {
+      await functions.httpsCallable('revokeOrgInvite').call({
+        'appId': appId,
+        'orgId': orgId,
+        'code': code.trim().toUpperCase(),
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Révocation de l’invitation impossible';
+    }
   }
 
   Future<void> requestResend({
@@ -147,7 +121,7 @@ class OrgService {
         .doc(appId)
         .collection('inviteResendRequests')
         .add({
-      'code': code,
+      'code': code.trim().toUpperCase(),
       'createdAt': FieldValue.serverTimestamp(),
       if (requesterUid != null) 'requesterUid': requesterUid,
       if (requesterEmail != null) 'requesterEmail': requesterEmail,
@@ -156,74 +130,245 @@ class OrgService {
 
   Future<Map<String, String>> acceptInvite({
     required String code,
-    required String uid,
-    required String email,
   }) async {
-    final snap = await db
-        .collectionGroup('invites')
-        .where(FieldPath.documentId, isEqualTo: code)
-        .get();
-
-    if (snap.docs.isEmpty) throw 'Invitation introuvable';
-
-    final d = snap.docs.first;
-    final data = d.data();
-    final expiresAt = (data['expiresAt'] as Timestamp).toDate();
-    if (DateTime.now().isAfter(expiresAt) || data['active'] != true) {
-      throw 'Invitation expirée';
+    try {
+      final result = await functions.httpsCallable('acceptOrgInvite').call({
+        'appId': appId,
+        'code': code.trim().toUpperCase(),
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      return {
+        'orgId': data['orgId'].toString(),
+        'orgName': data['orgName'].toString(),
+        'role': data['role'].toString(),
+      };
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Invitation invalide';
     }
-
-    final segments = d.reference.path.split('/');
-    final orgId = segments[3];
-
-    await d.reference.parent.parent!.collection('members').doc(uid).set({
-      'uid': uid,
-      'role': data['role'] ?? 'REP',
-      'email': email,
-      'displayName': email,
-      'joinedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    await d.reference.update({'active': false});
-
-    final orgDoc = await d.reference.parent.parent!.get();
-    return {
-      'orgId': orgId,
-      'orgName': (orgDoc.data() as Map)['name'] ?? 'Mon entreprise',
-      'role': data['role'] ?? 'REP',
-    };
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> members(String orgId) =>
-      orgRef(orgId).collection('members').snapshots();
+      orgRef(orgId)
+          .collection('members')
+          .where('status', isEqualTo: 'active')
+          .snapshots();
 
   Future<void> removeMember(String orgId, String uid) async {
-    await orgRef(orgId).collection('members').doc(uid).delete();
+    try {
+      await functions.httpsCallable('removeOrgMember').call({
+        'appId': appId,
+        'orgId': orgId,
+        'memberUid': uid,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Suppression du membre impossible';
+    }
   }
 
-  // ------------------------------
-  // Renvoi code d’activation (après paiement)
-  // ------------------------------
-  Future<void> requestActivationResend({
-    String? email,
-    String? orderId,
-    String? requesterUid,
-    String? requesterEmail,
+  Future<void> updateMemberRole({
+    required String orgId,
+    required String memberUid,
+    required String role,
   }) async {
-    if ((email == null || email.trim().isEmpty) &&
-        (orderId == null || orderId.trim().isEmpty)) {
-      throw 'Renseignez un email ou un numéro de commande';
+    try {
+      await functions.httpsCallable('updateOrgMemberRole').call({
+        'appId': appId,
+        'orgId': orgId,
+        'memberUid': memberUid,
+        'role': role.toUpperCase(),
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Modification du rôle impossible';
     }
-    await db
-        .collection('apps')
-        .doc(appId)
-        .collection('activationResendRequests')
-        .add({
-      'email': email?.trim(),
-      'orderId': orderId?.trim(),
-      'createdAt': FieldValue.serverTimestamp(),
-      if (requesterUid != null) 'requesterUid': requesterUid,
-      if (requesterEmail != null) 'requesterEmail': requesterEmail,
-    });
+  }
+
+  Future<void> transferOwnership({
+    required String orgId,
+    required String memberUid,
+  }) async {
+    try {
+      await functions.httpsCallable('transferOrgOwnership').call({
+        'appId': appId,
+        'orgId': orgId,
+        'memberUid': memberUid,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Transfert de propriété impossible';
+    }
+  }
+
+  Future<void> leaveOrganization(String orgId) async {
+    try {
+      await functions.httpsCallable('leaveOrganization').call({
+        'appId': appId,
+        'orgId': orgId,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Impossible de quitter l’entreprise';
+    }
+  }
+
+  Future<void> deleteAccount() async {
+    try {
+      await functions.httpsCallable('deleteProspectoAccount').call({
+        'appId': appId,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Suppression du compte impossible';
+    }
+  }
+
+  Future<void> updateOrganizationProfile({
+    required String orgId,
+    required String name,
+    String? slogan,
+    String? logoUrl,
+    String? companyEmail,
+    String? companyPhone,
+    String? website,
+  }) async {
+    try {
+      await functions.httpsCallable('updateOrgProfile').call({
+        'appId': appId,
+        'orgId': orgId,
+        'name': name.trim(),
+        'slogan': slogan?.trim() ?? '',
+        'logoUrl': logoUrl?.trim() ?? '',
+        'companyEmail': companyEmail?.trim() ?? '',
+        'companyPhone': companyPhone?.trim() ?? '',
+        'website': website?.trim() ?? '',
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Modification de l’entreprise impossible';
+    }
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> activity(String orgId) =>
+      orgRef(orgId)
+          .collection('activity')
+          .orderBy('createdAt', descending: true)
+          .limit(100)
+          .snapshots();
+
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> allMembers(String orgId) =>
+      orgRef(orgId).collection('members').snapshots();
+
+  Future<void> setMemberRouteAutonomy({
+    required String orgId,
+    required String memberUid,
+    required bool enabled,
+  }) async {
+    try {
+      await functions.httpsCallable('setMemberRouteAutonomy').call({
+        'appId': appId,
+        'orgId': orgId,
+        'memberUid': memberUid,
+        'enabled': enabled,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Modification de l’autonomie impossible';
+    }
+  }
+
+  Future<void> assignMemberPlan({
+    required String orgId,
+    required String memberUid,
+    required DateTime date,
+    required List<String> prospectIds,
+    String notes = '',
+    bool replaceExisting = false,
+  }) async {
+    try {
+      final dateId = '${date.year.toString().padLeft(4, '0')}-'
+          '${date.month.toString().padLeft(2, '0')}-'
+          '${date.day.toString().padLeft(2, '0')}';
+      await functions.httpsCallable('assignMemberPlan').call({
+        'appId': appId,
+        'orgId': orgId,
+        'memberUid': memberUid,
+        'date': dateId,
+        'prospectIds': prospectIds,
+        'notes': notes.trim(),
+        'replaceExisting': replaceExisting,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Attribution de la tournée impossible';
+    }
+  }
+
+  Future<void> upsertMemberAppointment({
+    required String orgId,
+    required String memberUid,
+    required String title,
+    required DateTime startsAt,
+    int durationMinutes = 60,
+    String? appointmentId,
+    String? prospectId,
+    String address = '',
+    String notes = '',
+    bool forceConflict = false,
+  }) async {
+    try {
+      await functions.httpsCallable('upsertMemberAppointment').call({
+        'appId': appId,
+        'orgId': orgId,
+        'memberUid': memberUid,
+        'title': title.trim(),
+        'startsAt': startsAt.toUtc().toIso8601String(),
+        'durationMinutes': durationMinutes,
+        if (appointmentId != null && appointmentId.isNotEmpty)
+          'appointmentId': appointmentId,
+        if (prospectId != null && prospectId.isNotEmpty)
+          'prospectId': prospectId,
+        'address': address.trim(),
+        'notes': notes.trim(),
+        'forceConflict': forceConflict,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Ajout du rendez-vous impossible';
+    }
+  }
+
+  Future<void> cancelMemberAppointment({
+    required String orgId,
+    required String memberUid,
+    required String appointmentId,
+  }) async {
+    try {
+      await functions.httpsCallable('cancelMemberAppointment').call({
+        'appId': appId,
+        'orgId': orgId,
+        'memberUid': memberUid,
+        'appointmentId': appointmentId,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Annulation du rendez-vous impossible';
+    }
+  }
+
+  CollectionReference<Map<String, dynamic>> memberPlans(
+    String orgId,
+    String memberUid,
+  ) => orgRef(orgId).collection('memberData').doc(memberUid).collection('plans');
+
+  CollectionReference<Map<String, dynamic>> memberAppointments(
+    String orgId,
+    String memberUid,
+  ) => orgRef(orgId)
+      .collection('memberData')
+      .doc(memberUid)
+      .collection('appointments');
+
+  Future<void> requestActivationResend({required String email}) async {
+    final normalized = email.trim().toLowerCase();
+    if (normalized.isEmpty) throw 'Renseignez votre adresse e-mail';
+    try {
+      await functions.httpsCallable('resendStripeActivationCode').call({
+        'email': normalized,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Renvoi du code impossible';
+    }
   }
 }

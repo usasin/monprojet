@@ -1,129 +1,124 @@
-import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import 'firebase_options.dart';
-
-// Permissions
-import 'core/permissions.dart';
-
-// Providers
-import 'pages/billing_screen.dart';
-import 'providers/theme_provider.dart';
-import 'providers/org_provider.dart';
-
-// Pages
-import 'pages/login_screen.dart';
-import 'pages/home_page.dart';
-import 'pages/select_prospects_page.dart';
-import 'pages/reporting_page.dart';
-import 'pages/map_page.dart';
 import 'pages/about_screen.dart';
-import 'pages/information_screen.dart';
 import 'pages/all_prospects_finished_page.dart';
-import 'pages/prospect_form_page.dart';
-import 'pages/prospects_finished_page.dart';
-import 'pages/settings_screen.dart';
-
-// Entreprise
-import 'pages/org_mode_gate.dart';
+import 'pages/billing_screen.dart';
+import 'pages/developer_console_screen.dart';
+import 'pages/home_page.dart';
+import 'pages/splash_screen.dart';
+import 'pages/enterprise_access_screen.dart';
+import 'pages/follow_up_center_page.dart';
+import 'pages/information_screen.dart';
+import 'pages/login_screen.dart';
+import 'pages/map_page.dart';
 import 'pages/org_create_screen.dart';
 import 'pages/org_join_screen.dart';
 import 'pages/org_members_screen.dart';
+import 'pages/org_profile_screen.dart';
+import 'pages/org_activity_screen.dart';
+import 'pages/org_mode_gate.dart';
+import 'pages/prospect_form_page.dart';
+import 'pages/reporting_page.dart';
+import 'pages/select_prospects_page.dart';
+import 'pages/settings_screen.dart';
+import 'pages/team_dashboard_screen.dart';
+import 'providers/org_provider.dart';
+import 'providers/theme_provider.dart';
+import 'services/ad_service.dart';
+import 'services/admin_test_mode.dart';
+import 'services/reminder_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 1) Demander ATT + Localisation AVANT la pub
-  await Permissions.init();
-
-  // 2) Initialiser AdMob APRÈS ATT
-  if (Platform.isIOS) {
-    await MobileAds.instance.initialize();
-  } else {
-    MobileAds.instance.initialize();
-  }
-
-  // 3) i18n + Firebase
   await EasyLocalization.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  // Sur Android, la configuration Firebase provient de
+  // android/app/google-services.json.
+  await Firebase.initializeApp();
   runApp(
     EasyLocalization(
       supportedLocales: const [Locale('fr'), Locale('en')],
       path: 'assets/translations',
       fallbackLocale: const Locale('fr'),
-      child: ScreenUtilInit(
-        designSize: const Size(360, 690),
-        builder: (_, __) => MultiProvider(
-          providers: [
-            ChangeNotifierProvider(create: (_) => ThemeProvider()),
-            ChangeNotifierProvider(create: (_) => OrgProvider()),
-          ],
-          child: const MyApp(),
-        ),
-      ),
+      useOnlyLangCode: true,
+      saveLocale: true,
+      child: const ProspectoProviders(),
     ),
   );
+
+  // Démarrage non bloquant : initialise AdMob/UMP sans afficher de plein
+  // écran au lancement. Les interstitiels ne sont proposés qu'à une pause
+  // naturelle du parcours FREE (voir AdService).
+  AdService.instance.initialize();
+  ReminderService.instance.initialize();
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class ProspectoProviders extends StatelessWidget {
+  const ProspectoProviders({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => OrgProvider()),
+      ],
+      child: const ProspectoApp(),
+    );
+  }
+}
+
+class ProspectoApp extends StatelessWidget {
+  const ProspectoApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeProvider>().currentTheme;
-
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
       title: 'Prospecto',
-      theme: theme,
-      localizationsDelegates: context.localizationDelegates,
-      supportedLocales: context.supportedLocales,
-      locale: context.locale,
-
-      // Démarrage direct sur Login
-      initialRoute: LoginScreen.routeName,
-
-      routes: {
-        // Auth + Home
-        LoginScreen.routeName             : (_) => const LoginScreen(),
-        HomePage.routeName                : (_) => const HomePage(),
-
-        // Prospection
-        SelectProspectsPage.routeName     : (_) => const SelectProspectsPage(),
-        ReportingPage.routeName           : (_) => const ReportingPage(),
-        MapPage.routeName                 : (_) => const MapPage(),
-
-        // Infos
-        AboutScreen.routeName             : (_) => const AboutScreen(),
-        InformationScreen.routeName       : (_) => const InformationScreen(),
-
-        // Historique / détails
-        AllProspectsFinishedPage.routeName: (_) => const AllProspectsFinishedPage(),
-        ProspectFormPage.routeName        : (_) => const ProspectFormPage(),
-        ProspectsFinishedPage.routeName   : (ctx) {
-          final date = ModalRoute.of(ctx)!.settings.arguments as DateTime;
-          return ProspectsFinishedPage(date: date);
-        },
-
-        // Réglages
-        SettingsScreen.routeName          : (_) => const SettingsScreen(),
-        BillingScreen.routeName           : (_) => const BillingScreen(),
-
-        // Entreprise
-        OrgModeGate.routeName             : (_) => const OrgModeGate(),
-        OrgCreateScreen.routeName         : (_) => const OrgCreateScreen(),
-        OrgJoinScreen.routeName           : (_) => const OrgJoinScreen(),
-        OrgMembersScreen.routeName        : (_) => const OrgMembersScreen(),
+      debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        final content = child ?? const SizedBox.shrink();
+        if (!AdminTestMode.enabled) return content;
+        return Banner(
+          message: AdminTestMode.label,
+          location: BannerLocation.topEnd,
+          child: content,
+        );
       },
-
-      onUnknownRoute: (_) =>
-          MaterialPageRoute(builder: (_) => const HomePage()),
+      theme: theme,
+      locale: context.locale,
+      supportedLocales: context.supportedLocales,
+      localizationsDelegates: context.localizationDelegates,
+      initialRoute: SplashScreen.routeName,
+      routes: {
+        SplashScreen.routeName: (_) => const SplashScreen(),
+        EnterpriseAccessScreen.routeName: (_) => const EnterpriseAccessScreen(),
+        HomePage.routeName: (_) => const HomePage(),
+        OrgModeGate.routeName: (_) => const OrgModeGate(),
+        LoginScreen.routeName: (_) => const LoginScreen(),
+        SelectProspectsPage.routeName: (_) => const SelectProspectsPage(),
+        MapPage.routeName: (_) => const MapPage(),
+        ReportingPage.routeName: (_) => const ReportingPage(),
+        AllProspectsFinishedPage.routeName: (_) =>
+            const AllProspectsFinishedPage(),
+        ProspectFormPage.routeName: (_) => const ProspectFormPage(),
+        SettingsScreen.routeName: (_) => const SettingsScreen(),
+        AboutScreen.routeName: (_) => const AboutScreen(),
+        InformationScreen.routeName: (_) => const InformationScreen(),
+        BillingScreen.routeName: (_) => const BillingScreen(),
+        DeveloperConsoleScreen.routeName: (_) => const DeveloperConsoleScreen(),
+        OrgCreateScreen.routeName: (_) => const OrgCreateScreen(),
+        OrgJoinScreen.routeName: (_) => const OrgJoinScreen(),
+        OrgMembersScreen.routeName: (_) => const OrgMembersScreen(),
+        OrgProfileScreen.routeName: (_) => const OrgProfileScreen(),
+        OrgActivityScreen.routeName: (_) => const OrgActivityScreen(),
+        FollowUpCenterPage.routeName: (_) => const FollowUpCenterPage(),
+        TeamDashboardScreen.routeName: (_) => const TeamDashboardScreen(),
+      },
     );
   }
 }

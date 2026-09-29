@@ -2,8 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-
-  <!-- Métadonnées de base -->
   <key>CFBundleDevelopmentRegion</key>
   <string>$(DEVELOPMENT_LANGUAGE)</string>
 
@@ -63,39 +61,27 @@
   <key>UIApplicationSupportsIndirectInputEvents</key>
   <true/>
 
-  <!-- ===== Confidentialité / Pubs / Réseaux ===== -->
+  <!-- ===== Ajouts requis Prospecto ===== -->
 
   <!-- Export compliance (HTTPS/TLS uniquement) -->
   <key>ITSAppUsesNonExemptEncryption</key>
   <false/>
 
-  <!-- App Tracking Transparency (AdMob) -->
+  <!-- ATT (AdMob) -->
   <key>NSUserTrackingUsageDescription</key>
   <string>Votre autorisation nous permet d’afficher des publicités plus pertinentes via AdMob. Aucune donnée n’est vendue.</string>
 
-  <!-- Localisation (premier plan) -->
+  <!-- Localisation (When In Use) -->
   <key>NSLocationWhenInUseUsageDescription</key>
   <string>La localisation est utilisée pour optimiser votre itinéraire et planifier vos visites à proximité.</string>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>Prospecto utilise votre photothèque uniquement pour ajouter le logo de votre entreprise.</string>
 
-  <!--
-    Si vous avez réellement besoin de la localisation en arrière-plan,
-    décommentez ce bloc ET activez Background Modes > Location updates dans Xcode.
-
-  <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-  <string>Prospecto peut accéder à votre position en arrière-plan pour maintenir l’itinéraire et le reporting à jour.</string>
-  <key>NSLocationAlwaysUsageDescription</key>
-  <string>Prospecto a besoin d’un accès permanent à la localisation pour suivre vos visites même si l’app n’est pas au premier plan.</string>
-  <key>UIBackgroundModes</key>
-  <array>
-    <string>location</string>
-  </array>
-  -->
-
-  <!-- AdMob App ID -->
+  <!-- AdMob App ID (si tu utilises une variable Codemagic, tu peux laisser cette ligne) -->
   <key>GADApplicationIdentifier</key>
   <string>$(ADMOB_APP_ID)</string>
 
-  <!-- Google Sign-In : schéma d’URL -->
+  <!-- Google Sign-In : schéma d’URL = REVERSED_CLIENT_ID (valeur réelle, pas de variable) -->
   <key>CFBundleURLTypes</key>
   <array>
     <dict>
@@ -108,16 +94,12 @@
     </dict>
   </array>
 
-  <!-- Autoriser des schemes Google -->
+  <!-- Autoriser les ouvertures d’URL Google (utile selon le flux utilisé) -->
   <key>LSApplicationQueriesSchemes</key>
   <array>
     <string>google</string>
     <string>com.googleusercontent.apps.163745254135-3q1q92pq15663uc2gkg4nqvfk8jkjdfp</string>
   </array>
-
-  <!-- ===== Google Maps iOS (OBLIGATOIRE pour google_maps_flutter) ===== -->
-  <key>GMSApiKey</key>
-  <string>AIzaSyCWE5qSeyBDrZIXWiNrt_-I4GAyQk20F6M</string>
 
 </dict>
 </plist>

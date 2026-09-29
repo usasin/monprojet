@@ -1,21 +1,51 @@
-import 'dart:math' as math;
+// lib/pages/map_page.dart
+// UI 2026 — Glassmorphism, fond auroré animé, style aligné select_prospects_page
+
+import 'dart:ui' as ui;
 
 import 'package:auto_size_text/auto_size_text.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../widgets/localized_text.dart';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
-import 'package:location/location.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../models/prospect.dart';
 import '../providers/theme_provider.dart';
+import '../services/access_control.dart';
 import '../services/firestore_service.dart';
 import '../widgets/brand_background.dart';
 
+import '../theme/prospecto_colors.dart';
+// ════════════════════════════════════════════════════════════════
+//  Palette 2026
+// ════════════════════════════════════════════════════════════════
+class _P {
+  static const indigo     = ProspectoColors.blue;
+  static const violet     = ProspectoColors.green;
+  static const sky        = ProspectoColors.blueSoft;
+  static const mint       = ProspectoColors.green;
+  static const coral      = ProspectoColors.peach;
+  static const amber      = ProspectoColors.peachSoft;
+  static const onLight    = ProspectoColors.textPrimary;
+  static const onLightSub = ProspectoColors.textSecondary;
+  static const onDark     = Color(0xFFF0F2FF);
+  static const onDarkSub  = Color(0xFF9099C4);
+
+  static LinearGradient get primary => const LinearGradient(
+    colors: [indigo, violet], begin: Alignment.topLeft, end: Alignment.bottomRight,
+  );
+  static LinearGradient get aurora => const LinearGradient(
+    colors: [ProspectoColors.backgroundTop, ProspectoColors.blueMist, ProspectoColors.peachMist],
+    begin: Alignment.topLeft, end: Alignment.bottomRight,
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Page
+// ════════════════════════════════════════════════════════════════
 class MapPage extends StatefulWidget {
   static const routeName = '/map';
   const MapPage({Key? key}) : super(key: key);
@@ -26,109 +56,46 @@ class MapPage extends StatefulWidget {
 
 class _MapPageState extends State<MapPage> with SingleTickerProviderStateMixin {
   DateTime _date = DateTime.now();
-  Set<Marker> _markers = {};
-  GoogleMapController? _ctrl;
+  bool _loading = false;
+  List<Prospect> _route = [];
 
-  late final AnimationController _animController;
-  late final Animation<double> _pulseAnimation;
+  late final AnimationController _listAnim = AnimationController(
+    vsync: this, duration: const Duration(milliseconds: 600),
+  );
 
   @override
   void initState() {
     super.initState();
-
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
-    );
-
-    _loadRoute();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final ok = await AccessControl.requireLogin(
+        context,
+        reason: "Pour afficher l'itinéraire, connecte-toi.",
+      );
+      if (!ok && mounted) { Navigator.of(context).maybePop(); return; }
+      await _loadRoute();
+    });
   }
 
   @override
   void dispose() {
-    _animController.dispose();
-    _ctrl?.dispose();
+    _listAnim.dispose();
     super.dispose();
   }
 
   Future<void> _loadRoute() async {
-    final newMarkers = <Marker>{};
-
-    // 1) Position utilisateur
+    setState(() { _loading = true; });
     try {
-      final loc = Location();
-      if (!(await loc.serviceEnabled())) await loc.requestService();
-      final perm = await loc.requestPermission();
-      if (perm == PermissionStatus.granted || perm == PermissionStatus.grantedLimited) {
-        final u = await loc.getLocation();
-        if (u.latitude != null && u.longitude != null) {
-          newMarkers.add(Marker(
-            markerId: const MarkerId('user'),
-            position: LatLng(u.latitude!, u.longitude!),
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-            infoWindow: InfoWindow(title: 'Vous êtes ici'.tr()),
-          ));
-        }
-      }
-    } catch (_) {}
-
-    // 2) Points prospects
-    final ids = await FirestoreService().loadPlan(_date);
-    if (ids.isNotEmpty) {
-      final snaps = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(FirebaseAuth.instance.currentUser!.uid)
-          .collection('prospects')
-          .where(FieldPath.documentId, whereIn: ids)
-          .get();
-
-      final docs = {for (var d in snaps.docs) d.id: d.data()};
-      for (final id in ids) {
-        final d = docs[id];
-        if (d == null) continue;
-        newMarkers.add(Marker(
-          markerId: MarkerId(id),
-          position: LatLng((d['lat'] as num).toDouble(), (d['lng'] as num).toDouble()),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRose),
-          infoWindow: InfoWindow(title: d['name'] as String?, snippet: d['address'] as String?),
-        ));
-      }
+      final ids = await FirestoreService().loadPlan(_date);
+      if (ids.isEmpty) { if (!mounted) return; setState(() { _route = []; }); return; }
+      final fetched = await FirestoreService().fetchProspectsByIds(ids);
+      final byId    = {for (final p in fetched) p.id: p};
+      final ordered = <Prospect>[for (final id in ids) if (byId[id] != null) byId[id]!];
+      if (!mounted) return;
+      setState(() => _route = ordered);
+      _listAnim.forward(from: 0);
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-
-    setState(() => _markers = newMarkers);
-
-    // 3) Ajuste la caméra
-    WidgetsBinding.instance.addPostFrameCallback((_) => _fitToBounds());
-  }
-
-  void _fitToBounds() {
-    if (_ctrl == null || _markers.isEmpty) return;
-
-    // S'il n'y a qu'un point
-    if (_markers.length == 1) {
-      _ctrl!.animateCamera(CameraUpdate.newLatLngZoom(_markers.first.position, 13));
-      return;
-    }
-
-    double? minLat, maxLat, minLng, maxLng;
-    for (final m in _markers) {
-      final lat = m.position.latitude;
-      final lng = m.position.longitude;
-      minLat = (minLat == null) ? lat : math.min(minLat, lat);
-      maxLat = (maxLat == null) ? lat : math.max(maxLat, lat);
-      minLng = (minLng == null) ? lng : math.min(minLng, lng);
-      maxLng = (maxLng == null) ? lng : math.max(maxLng, lng);
-    }
-
-    final bounds = LatLngBounds(
-      southwest: LatLng(minLat!, minLng!),
-      northeast: LatLng(maxLat!, maxLng!),
-    );
-    _ctrl!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 60));
   }
 
   Future<void> _pickDate() async {
@@ -136,226 +103,653 @@ class _MapPageState extends State<MapPage> with SingleTickerProviderStateMixin {
       context: context,
       initialDate: _date,
       firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime.now().add(const Duration(days: 30)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    if (d != null) {
-      setState(() => _date = d);
-      await _loadRoute();
-    }
+    if (d == null) return;
+    setState(() => _date = d);
+    await _loadRoute();
   }
 
-  Future<void> _shareRoute() async {
-    final ids = await FirestoreService().loadPlan(_date);
-    if (ids.isEmpty) return;
-
-    final snaps = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(FirebaseAuth.instance.currentUser!.uid)
-        .collection('prospects')
-        .where(FieldPath.documentId, whereIn: ids)
-        .get();
-    final docs = {for (var d in snaps.docs) d.id: d.data()};
-
-    final coords = ids.map((id) => '${docs[id]?['lat']},${docs[id]?['lng']}').join('/');
-    final url = 'https://www.google.com/maps/dir/$coords';
-
-    await Share.share(
-      'Tournée du {date}'.tr(namedArgs: {'date': DateFormat.yMd().format(_date)}) + '\n$url',
-      subject: 'Itinéraire {date}'.tr(namedArgs: {'date': DateFormat.yMd().format(_date)}),
+  Uri? _buildGMapsUri(List<Prospect> list) {
+    if (list.isEmpty) return null;
+    final coords      = list.take(24).map((p) => '${p.lat},${p.lng}').toList();
+    final destination = coords.last;
+    final waypoints   = coords.length <= 2 ? '' : coords.sublist(0, coords.length - 1).join('|');
+    return Uri.parse(
+      'https://www.google.com/maps/dir/?api=1'
+      '&destination=$destination'
+      '${waypoints.isNotEmpty ? '&waypoints=$waypoints' : ''}'
+      '&travelmode=driving',
     );
   }
 
   Future<void> _openInMaps() async {
-    final ids = await FirestoreService().loadPlan(_date);
-    if (ids.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Aucun point dans la tournée.'.tr())),
-      );
-      return;
-    }
+    final uri = _buildGMapsUri(_route);
+    if (uri == null) { _toast('Aucun point dans la tournée.'); return; }
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 
-    final snaps = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(FirebaseAuth.instance.currentUser!.uid)
-        .collection('prospects')
-        .where(FieldPath.documentId, whereIn: ids)
-        .get();
-    final docs = {for (var d in snaps.docs) d.id: d.data()};
-
-    String? origin;
-    try {
-      final loc = Location();
-      if (!(await loc.serviceEnabled())) await loc.requestService();
-      final perm = await loc.requestPermission();
-      if (perm == PermissionStatus.granted || perm == PermissionStatus.grantedLimited) {
-        final here = await loc.getLocation();
-        origin = '${here.latitude},${here.longitude}';
-      }
-    } catch (_) {}
-
-    final allPts = [
-      for (final id in ids) '${docs[id]?['lat']},${docs[id]?['lng']}'
-    ]..removeWhere((e) => e.isEmpty);
-
-    if (allPts.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Coordonnées manquantes.'.tr())),
-      );
-      return;
-    }
-
-    final originStr = origin ?? allPts.first;
-    final destinationStr = allPts.last;
-    final waypointList = (origin == null ? allPts.sublist(1) : allPts)
-        .sublist(0, math.max(0, math.min(23, allPts.length - 1)))
-        .where((p) => p != destinationStr)
-        .toList();
-    final waypoints = waypointList.join('|');
-
-    final uri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1'
-          '&origin=$originStr'
-          '&destination=$destinationStr'
-          '${waypoints.isNotEmpty ? '&waypoints=$waypoints' : ''}'
-          '&travelmode=driving',
+  Future<void> _shareRoute() async {
+    final uri = _buildGMapsUri(_route);
+    if (uri == null) return;
+    await Share.share(
+      'Itinéraire du ${DateFormat.yMd().format(_date)}\n${uri.toString()}',
+      subject: 'Itinéraire Prospecto',
     );
+  }
 
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Impossible d’ouvrir Google Maps.'.tr())),
-      );
-    }
+  Future<void> _openSingle(Prospect p) async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving',
+    );
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _call(Prospect p) async {
+    final phone = (p.phone ?? '').trim();
+    if (phone.isEmpty) return;
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  }
+
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: LText(msg),
+      backgroundColor: _P.mint,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.watch<ThemeProvider>().currentTheme;
-    final cs = theme.colorScheme;
+    final theme  = context.watch<ThemeProvider>().currentTheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final size   = MediaQuery.of(context).size;
+    final maxW   = size.width >= 1024 ? 900.0 : (size.shortestSide >= 600 ? 720.0 : 560.0);
 
     return Theme(
       data: theme,
       child: BrandBackground(
-        gradientColors: const [Color(0xFFDEEFFF), Color(0xFFB3C7FF), Color(0xFFDCC8FF)],
+        gradientColors: _P.aurora.colors,
         blurSigma: 14,
-        animate: true,
+        animate: !_loading,
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            title: Text(
-              'Itinéraire'.tr(),
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-            centerTitle: true,
-            actions: [
-              IconButton.filledTonal(
-                icon: const Icon(Icons.share),
-                tooltip: 'Partager'.tr(),
-                onPressed: _shareRoute,
-              ),
-            ],
-          ),
-          body: Column(
-            children: [
-              // Carte "date" en verre dépoli
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: Card(
-                  color: cs.surfaceContainerHighest.withOpacity(.95),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 2,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: _pickDate,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      child: Row(
-                        children: [
-                          Icon(Icons.calendar_month_rounded, color: cs.primary),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: AutoSizeText(
-                              '${'Carte du'.tr()} ${DateFormat.yMMMMd(context.locale.languageCode).format(_date)}',
-                              style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700),
-                              maxLines: 1,
-                              minFontSize: 12,
+          extendBodyBehindAppBar: true,
+          appBar: _buildAppBar(isDark),
+          bottomNavigationBar: _buildBottomBar(isDark),
+          body: SafeArea(
+            top: true,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxW),
+                child: CustomScrollView(
+                  slivers: [
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                      sliver: SliverList(
+                        delegate: SliverChildListDelegate([
+                          // ── Date picker
+                          _GlassCard(
+                            isDark: isDark,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _SectionHeader(step: 1, icon: Icons.calendar_today_rounded, title: 'Date de la tournée', isDark: isDark),
+                                const SizedBox(height: 12),
+                                GestureDetector(
+                                  onTap: _pickDate,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                    decoration: BoxDecoration(
+                                      color: _P.indigo.withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: _P.indigo.withOpacity(0.2)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.calendar_month_rounded, color: _P.indigo, size: 20),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: AutoSizeText(
+                                            DateFormat.yMMMMEEEEd(context.locale.languageCode).format(_date),
+                                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15,
+                                                color: isDark ? _P.onDark : _P.onLight),
+                                            maxLines: 1, minFontSize: 12,
+                                          ),
+                                        ),
+                                        Icon(Icons.edit_calendar_rounded, color: _P.indigo.withOpacity(0.6), size: 18),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          Icon(Icons.edit_calendar_rounded, color: cs.onSurfaceVariant),
-                        ],
+                          const SizedBox(height: 10),
+
+                          // ── Stats tournée
+                          if (!_loading && _route.isNotEmpty)
+                            _TourStatsCard(route: _route, isDark: isDark),
+
+                          const SizedBox(height: 10),
+
+                          // ── Liste
+                          _GlassCard(
+                            isDark: isDark,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _SectionHeader(
+                                  step: 2,
+                                  icon: Icons.route_rounded,
+                                  title: 'Itinéraire (${_route.length} arrêt${_route.length > 1 ? 's' : ''})',
+                                  isDark: isDark,
+                                ),
+                                const SizedBox(height: 12),
+                                if (_loading)
+                                  _LoadingRow()
+                                else if (_route.isEmpty)
+                                  _EmptyRoute(isDark: isDark)
+                                else
+                                  Column(
+                                    children: List.generate(_route.length, (i) {
+                                      final p = _route[i];
+                                      return _RouteItem(
+                                        prospect: p,
+                                        index: i,
+                                        total: _route.length,
+                                        isDark: isDark,
+                                        onNavigate: () => _openSingle(p),
+                                        onCall: (p.phone ?? '').trim().isNotEmpty ? () => _call(p) : null,
+                                      );
+                                    }),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ]),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
-
-              // Google Map (plein écran)
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: GoogleMap(
-                    initialCameraPosition: const CameraPosition(
-                      target: LatLng(43.2965, 5.3698), // Marseille par défaut
-                      zoom: 12,
-                    ),
-                    markers: _markers,
-                    myLocationEnabled: true,
-                    myLocationButtonEnabled: true,
-                    zoomControlsEnabled: false,
-                    onMapCreated: (c) {
-                      _ctrl = c;
-                      // Ajuste la vue dès que la carte est prête
-                      WidgetsBinding.instance.addPostFrameCallback((_) => _fitToBounds());
-                    },
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
 
-          floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-          floatingActionButton: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Bandeau info
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: cs.primaryContainer.withOpacity(0.92),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
-                ),
-                child: Text(
-                  'Appuyez sur le bouton pour démarrer la navigation'.tr(),
-                  style: TextStyle(
-                    color: cs.onPrimaryContainer,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
+  PreferredSizeWidget _buildAppBar(bool isDark) {
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      titleSpacing: 8,
+      flexibleSpace: ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(color: Colors.white.withOpacity(isDark ? 0.05 : 0.28)),
+        ),
+      ),
+      title: Row(
+        children: [
+          Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(gradient: _P.primary, borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.map_rounded, color: Colors.white, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: LText(
+              'Itinéraire'.tr(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                color: isDark ? _P.onDark : _P.onLight,
+              ),
+            ),
+          ),
+        ],
+      ),
+      centerTitle: false,
+      actions: [
+        if (_route.isNotEmpty)
+          _AppBarAction(icon: Icons.share_rounded, tooltip: 'Partager'.tr(), onTap: _shareRoute),
+        _AppBarAction(icon: Icons.refresh_rounded, tooltip: 'Rafraîchir'.tr(), onTap: _loadRoute),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  Widget _buildBottomBar(bool isDark) {
+    return SafeArea(
+      top: false,
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              border: Border(top: BorderSide(color: Colors.white.withOpacity(0.25), width: 0.8)),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                // Compteur
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: _route.isNotEmpty ? _P.primary : null,
+                    color: _route.isEmpty ? Colors.white.withOpacity(0.25) : null,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: _route.isNotEmpty
+                        ? [BoxShadow(color: _P.indigo.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))]
+                        : [],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.pin_drop_rounded, size: 18, color: _route.isNotEmpty ? Colors.white : Colors.black38),
+                      const SizedBox(width: 6),
+                      LText(
+                        '${_route.length} arrêt${_route.length > 1 ? 's' : ''}',
+                        style: TextStyle(
+                          color: _route.isNotEmpty ? Colors.white : Colors.black38,
+                          fontWeight: FontWeight.w900, fontSize: 14,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-
-              // Bouton pulsant “Ouvrir Google Maps”
-              ScaleTransition(
-                scale: _pulseAnimation,
-                child: FloatingActionButton.extended(
-                  onPressed: _openInMaps,
-                  tooltip: 'Ouvrir Google Maps'.tr(),
-                  icon: const Icon(Icons.route_rounded),
-                  label: Text('Démarrer'.tr()),
+                const SizedBox(width: 12),
+                // Bouton démarrer
+                Expanded(
+                  child: _GradientButton(
+                    label: 'Démarrer GPS'.tr(),
+                    icon: Icons.navigation_rounded,
+                    onTap: _route.isEmpty ? null : _openInMaps,
+                  ),
                 ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Widgets
+// ════════════════════════════════════════════════════════════════
+
+class _GlassCard extends StatelessWidget {
+  final bool isDark;
+  final Widget child;
+  const _GlassCard({required this.isDark, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.07) : Colors.white.withOpacity(0.62),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark ? Colors.white.withOpacity(0.13) : Colors.white.withOpacity(0.75),
+            ),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 6))],
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final int step;
+  final IconData icon;
+  final String title;
+  final bool isDark;
+  const _SectionHeader({required this.step, required this.icon, required this.title, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 26, height: 26,
+          decoration: BoxDecoration(
+            gradient: _P.primary,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [BoxShadow(color: _P.indigo.withOpacity(0.35), blurRadius: 8, offset: const Offset(0, 4))],
+          ),
+          alignment: Alignment.center,
+          child: LText('$step', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
+        ),
+        const SizedBox(width: 10),
+        Icon(icon, size: 18, color: _P.indigo),
+        const SizedBox(width: 8),
+        Expanded(
+          child: LText(title, style: TextStyle(
+            fontWeight: FontWeight.w800, fontSize: 15,
+            color: isDark ? _P.onDark : _P.onLight,
+          )),
+        ),
+      ],
+    );
+  }
+}
+
+class _TourStatsCard extends StatelessWidget {
+  final List<Prospect> route;
+  final bool isDark;
+  const _TourStatsCard({required this.route, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_P.indigo.withOpacity(0.12), _P.violet.withOpacity(0.08)],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _P.indigo.withOpacity(0.22)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _StatItem(value: '${route.length}', label: 'Arrêts', icon: Icons.pin_drop_rounded, color: _P.indigo),
+              _StatDivider(),
+              _StatItem(
+                value: route.where((p) => (p.phone ?? '').isNotEmpty).length.toString(),
+                label: 'Téléphones',
+                icon: Icons.call_rounded,
+                color: _P.mint,
+              ),
+              _StatDivider(),
+              _StatItem(
+                value: route.where((p) => (p.website ?? '').isNotEmpty).length.toString(),
+                label: 'Sites web',
+                icon: Icons.public_rounded,
+                color: _P.sky,
               ),
             ],
           ),
         ),
       ),
     );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String value, label;
+  final IconData icon;
+  final Color color;
+  const _StatItem({required this.value, required this.label, required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 38, height: 38,
+          decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(height: 6),
+        LText(value, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: color)),
+        LText(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _P.onLightSub)),
+      ],
+    );
+  }
+}
+
+class _StatDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Container(width: 1, height: 40, color: Colors.white.withOpacity(0.3));
+}
+
+class _RouteItem extends StatelessWidget {
+  final Prospect prospect;
+  final int index, total;
+  final bool isDark;
+  final VoidCallback onNavigate;
+  final VoidCallback? onCall;
+  const _RouteItem({
+    required this.prospect, required this.index, required this.total,
+    required this.isDark, required this.onNavigate, this.onCall,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isLast = index == total - 1;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Numéro + line
+        Column(
+          children: [
+            Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(
+                gradient: _P.primary,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [BoxShadow(color: _P.indigo.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3))],
+              ),
+              alignment: Alignment.center,
+              child: LText('${index + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
+            ),
+            if (!isLast)
+              Container(
+                width: 2, height: 32,
+                margin: const EdgeInsets.symmetric(vertical: 3),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [_P.indigo.withOpacity(0.3), _P.indigo.withOpacity(0.05)],
+                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                  ),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(width: 12),
+        // Contenu
+        Expanded(
+          child: Container(
+            margin: EdgeInsets.only(bottom: isLast ? 0 : 8),
+            padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.55),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withOpacity(0.4)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      LText(
+                        prospect.name,
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14,
+                            color: isDark ? _P.onDark : _P.onLight),
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      LText(
+                        prospect.address,
+                        style: TextStyle(fontSize: 12, color: isDark ? _P.onDarkSub : _P.onLightSub),
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                      ),
+                      if (prospect.category.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        _MiniChip(label: prospect.category, color: _P.indigo),
+                      ],
+                    ],
+                  ),
+                ),
+                // Actions
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _IconAction(icon: Icons.navigation_rounded, color: _P.indigo, onTap: onNavigate),
+                    if (onCall != null) ...[
+                      const SizedBox(width: 6),
+                      _IconAction(icon: Icons.call_rounded, color: _P.mint, onTap: onCall!),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _IconAction extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  const _IconAction({required this.icon, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34, height: 34,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.25)),
+        ),
+        child: Icon(icon, color: color, size: 17),
+      ),
+    );
+  }
+}
+
+class _MiniChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _MiniChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
+      child: LText(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+    );
+  }
+}
+
+class _LoadingRow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 24),
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class _EmptyRoute extends StatelessWidget {
+  final bool isDark;
+  const _EmptyRoute({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Column(
+        children: [
+          Container(
+            width: 64, height: 64,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [_P.sky.withOpacity(0.2), _P.violet.withOpacity(0.15)]),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(Icons.map_outlined, size: 32, color: _P.indigo.withOpacity(0.5)),
+          ),
+          const SizedBox(height: 14),
+          LText('Aucune tournée enregistrée',
+              style: TextStyle(fontWeight: FontWeight.w700, color: isDark ? _P.onDarkSub : _P.onLightSub)),
+          const SizedBox(height: 4),
+          LText('Va dans "Planifier" puis enregistre ta tournée.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: (isDark ? _P.onDarkSub : _P.onLightSub).withOpacity(0.7))),
+        ],
+      ),
+    );
+  }
+}
+
+class _GradientButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+  const _GradientButton({required this.label, required this.icon, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedOpacity(
+        opacity: enabled ? 1.0 : 0.45,
+        duration: const Duration(milliseconds: 200),
+        child: Container(
+          height: 46,
+          decoration: BoxDecoration(
+            gradient: enabled ? _P.primary : const LinearGradient(colors: [Color(0xFF9099C4), Color(0xFF9099C4)]),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: enabled
+                ? [BoxShadow(color: _P.indigo.withOpacity(0.35), blurRadius: 14, offset: const Offset(0, 6))]
+                : [],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              LText(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AppBarAction extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  const _AppBarAction({required this.icon, required this.tooltip, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(icon: Icon(icon), tooltip: tooltip, onPressed: onTap);
   }
 }

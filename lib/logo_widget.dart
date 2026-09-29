@@ -1,3 +1,5 @@
+import 'package:easy_localization/easy_localization.dart';
+import 'widgets/localized_text.dart';
 import 'package:flutter/material.dart';
 
 class LogoWidget extends StatelessWidget {
@@ -10,4 +12,3 @@ class LogoWidget extends StatelessWidget {
     );
   }
 }
-

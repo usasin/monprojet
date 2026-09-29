@@ -41,3 +41,19 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local credentials and generated artifacts
+**/*.jks
+**/*.keystore
+**/key.properties*
+**/local.properties
+.env
+.env.*
+!.env.example
+**/node_modules/
+functions/lib/
+**/service-account*.json
+**/serviceAccount*.json
+**/*firebase-adminsdk*.json
+**/*.backup*
+config/stripe_enterprise.json

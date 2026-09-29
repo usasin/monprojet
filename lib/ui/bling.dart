@@ -1,5 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../theme/prospecto_colors.dart';
+import '../widgets/localized_text.dart';
 
 class AuroraBackground extends StatefulWidget {
   final Widget child;
@@ -36,7 +38,9 @@ class _AuroraBackgroundState extends State<AuroraBackground>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    Color base = widget.baseColor ?? cs.surface;
+    Color base = widget.baseColor ?? (Theme.of(context).brightness == Brightness.dark
+        ? ProspectoColors.dark
+        : ProspectoColors.background);
     double o  = widget.blobOpacity.clamp(0, 1);
 
     Widget blob(Color color, Alignment a1, Alignment a2, double size) {
@@ -105,7 +109,11 @@ class _GradientTextState extends State<GradientText> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final colors = widget.colors ?? [cs.primary, cs.tertiary, cs.secondary];
+    final colors = widget.colors ?? const [
+      ProspectoColors.blue,
+      ProspectoColors.green,
+      ProspectoColors.peach,
+    ];
     return AnimatedBuilder(
       animation: _c,
       builder: (_, __) {
@@ -121,7 +129,7 @@ class _GradientTextState extends State<GradientText> with SingleTickerProviderSt
             ).createShader(bounds.shift(Offset(dx, 0)));
           },
           child: Text(
-            widget.text,
+            prospectoTranslate(context, widget.text),
             style: (widget.style ?? DefaultTextStyle.of(context).style).copyWith(color: Colors.white),
           ),
         );
@@ -149,16 +157,27 @@ class Glass extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final lightOpacity = opacity <= 0
+        ? 0.0
+        : (0.72 + opacity.clamp(0.0, 0.20)).toDouble();
+    final glassColor = isDark
+        ? Colors.white.withOpacity(opacity <= 0 ? 0.0 : opacity)
+        : cs.surface.withOpacity(lightOpacity);
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
         child: Container(
           decoration: BoxDecoration(
-            color: cs.onSurface.withOpacity(opacity),
+            color: glassColor,
             borderRadius: BorderRadius.circular(radius),
-            border: Border.fromBorderSide(border ?? BorderSide(color: cs.outlineVariant.withOpacity(.4))),
+            border: Border.fromBorderSide(
+              border ?? BorderSide(color: cs.outline.withOpacity(.72)),
+            ),
           ),
           padding: padding,
           child: child,

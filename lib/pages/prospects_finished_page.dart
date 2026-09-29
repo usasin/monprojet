@@ -1,3 +1,5 @@
+import 'package:easy_localization/easy_localization.dart';
+import '../widgets/localized_text.dart';
 import 'dart:io';
 
 import 'package:fl_chart/fl_chart.dart';
@@ -12,6 +14,7 @@ import '../providers/theme_provider.dart';
 import '../services/firestore_service.dart';
 import '../widgets/brand_background.dart';
 
+import '../theme/prospecto_colors.dart';
 class ProspectsFinishedPage extends StatefulWidget {
   static const routeName = '/prospects_finished';
   final DateTime date;
@@ -117,7 +120,7 @@ class _ProspectsFinishedPageState extends State<ProspectsFinishedPage> {
       label: Row(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 10, height: 10, decoration: BoxDecoration(color: clr, shape: BoxShape.circle)),
         const SizedBox(width: 6),
-        Text('$lbl ($n)'),
+        LText('$lbl ($n)'),
       ]),
     );
 
@@ -165,7 +168,7 @@ class _ProspectsFinishedPageState extends State<ProspectsFinishedPage> {
     return Theme(
       data: theme,
       child: BrandBackground(
-        gradientColors: const [Color(0xFFDEEFFF), Color(0xFFB3C7FF), Color(0xFFDCC8FF)],
+        gradientColors: const [ProspectoColors.backgroundTop, ProspectoColors.blueMist, ProspectoColors.peachMist],
         blurSigma: 14,
         animate: true,
         child: Scaffold(
@@ -173,13 +176,13 @@ class _ProspectsFinishedPageState extends State<ProspectsFinishedPage> {
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
-            title: Text('Terminés — $formattedDate',
+            title: LText('Terminés — $formattedDate',
                 style: const TextStyle(fontWeight: FontWeight.w800)),
             centerTitle: true,
             actions: [
               IconButton.filledTonal(
                 icon : const Icon(Icons.share_rounded),
-                tooltip: 'Partager tout',
+                tooltip: 'Partager tout'.tr(),
                 onPressed: _list.isEmpty ? null : _shareAll,
               ),
             ],
@@ -199,7 +202,7 @@ class _ProspectsFinishedPageState extends State<ProspectsFinishedPage> {
                       Icon(Icons.folder_rounded, color: cs.primary),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text('Fichiers du $formattedDate',
+                        child: LText('Fichiers du $formattedDate',
                             style: theme.textTheme.titleMedium,
                             overflow: TextOverflow.ellipsis),
                       ),
@@ -220,7 +223,7 @@ class _ProspectsFinishedPageState extends State<ProspectsFinishedPage> {
                         icon : const Icon(Icons.insert_drive_file_rounded),
                         label: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 180),
-                          child: Text(name, overflow: TextOverflow.ellipsis),
+                          child: LText(name, overflow: TextOverflow.ellipsis),
                         ),
                         onPressed: () => Share.shareXFiles([XFile(f.path)], subject: name),
                       );
@@ -233,7 +236,7 @@ class _ProspectsFinishedPageState extends State<ProspectsFinishedPage> {
               Expanded(
                 child: _list.isEmpty
                     ? Center(
-                  child: Text('Aucun prospect pour le $formattedDate.',
+                  child: LText('Aucun prospect pour le $formattedDate.',
                       style: TextStyle(color: cs.onSurfaceVariant)),
                 )
                     : ListView.separated(
@@ -267,7 +270,7 @@ class _ProspectCard extends StatelessWidget {
         children: [
           Icon(icn, size: 18, color: cs.onSurfaceVariant),
           const SizedBox(width: 6),
-          Expanded(child: Text(txt, maxLines: 1, overflow: TextOverflow.ellipsis)),
+          Expanded(child: LText(txt, maxLines: 1, overflow: TextOverflow.ellipsis)),
         ],
       ),
     );
@@ -286,10 +289,10 @@ class _ProspectCard extends StatelessWidget {
                 CircleAvatar(
                   backgroundColor: cs.primary,
                   foregroundColor: cs.onPrimary,
-                  child: Text(p.name.isNotEmpty ? p.name[0].toUpperCase() : '?'),
+                  child: LText(p.name.isNotEmpty ? p.name[0].toUpperCase() : '?'),
                 ),
                 const SizedBox(width: 12),
-                Expanded(child: Text(p.name,
+                Expanded(child: LText(p.name,
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: txtTheme.titleMedium!.copyWith(fontWeight: FontWeight.w800))),
               ],
@@ -297,7 +300,7 @@ class _ProspectCard extends StatelessWidget {
             const SizedBox(height: 8),
 
             /* ---------- Adresse ---------- */
-            Text(p.address, style: txtTheme.bodyMedium,
+            LText(p.address, style: txtTheme.bodyMedium,
                 maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 6),
 
@@ -307,14 +310,14 @@ class _ProspectCard extends StatelessWidget {
               runSpacing: -4,
               children: [
                 Chip(
-                  label: Text(p.category),
+                  label: LText(p.category),
                   backgroundColor: cs.secondaryContainer,
                   labelStyle: TextStyle(color: cs.onSecondaryContainer),
                   visualDensity: VisualDensity.compact,
                 ),
                 if (p.status != null)
                   Chip(
-                    label: Text(p.status!),
+                    label: LText(p.status!),
                     backgroundColor: cs.tertiaryContainer,
                     labelStyle: TextStyle(color: cs.onTertiaryContainer),
                     visualDensity: VisualDensity.compact,

@@ -1,5 +1,6 @@
 // lib/pages/all_prospects_finished_page.dart
 import 'package:easy_localization/easy_localization.dart';
+import '../widgets/localized_text.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +10,7 @@ import '../services/firestore_service.dart';
 import '../widgets/brand_background.dart';
 import 'prospects_finished_page.dart';
 
+import '../theme/prospecto_colors.dart';
 class AllProspectsFinishedPage extends StatefulWidget {
   static const routeName = '/prospects_finished_all';
   const AllProspectsFinishedPage({Key? key}) : super(key: key);
@@ -91,7 +93,7 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
 
   Chip _chip(String lbl, int n, Color c, ColorScheme cs, TextTheme t) => Chip(
     avatar: CircleAvatar(backgroundColor: c, radius: 6),
-    label: Text('$lbl ($n)', style: t.bodySmall),
+    label: LText('$lbl ($n)', style: t.bodySmall),
     backgroundColor: cs.surfaceContainerHighest.withOpacity(.9),
     visualDensity: VisualDensity.compact,
     shape: StadiumBorder(side: BorderSide(color: c.withOpacity(.35))),
@@ -121,7 +123,7 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Column(
           children: [
-            Text('Vue globale'.tr(), style: t.titleMedium!.copyWith(fontWeight: FontWeight.w800)),
+            LText('Vue globale'.tr(), style: t.titleMedium!.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
             SizedBox(height: 150, child: pie),
             const SizedBox(height: 8),
@@ -137,10 +139,10 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
               ],
             ),
             const SizedBox(height: 10),
-            Text('Présents gérants : ${cnt.presentGerant}  ·  Clôtures : ${cnt.closed}',
+            LText('Présents gérants : ${cnt.presentGerant}  ·  Clôtures : ${cnt.closed}',
                 style: t.bodySmall),
             const SizedBox(height: 4),
-            Text('Note utilisateur : ${userScore.toStringAsFixed(1)}/10',
+            LText('Note utilisateur : ${userScore.toStringAsFixed(1)}/10',
                 style: t.bodyMedium),
           ],
         ),
@@ -177,7 +179,7 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
     final t  = Theme.of(context).textTheme;
 
     return BrandBackground(
-      gradientColors: const [Color(0xFFDEEFFF), Color(0xFFB3C7FF), Color(0xFFDCC8FF)],
+      gradientColors: const [ProspectoColors.backgroundTop, ProspectoColors.blueMist, ProspectoColors.peachMist],
       blurSigma: 14,
       animate: true,
       child: Scaffold(
@@ -186,7 +188,7 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
-          title: Text('Historique prospects'.tr(),
+          title: LText('Historique prospects'.tr(),
               style: const TextStyle(fontWeight: FontWeight.w800)),
         ),
 
@@ -199,7 +201,7 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
             children: [
               Icon(Icons.inbox_outlined, color: cs.onSurfaceVariant, size: 48),
               const SizedBox(height: 8),
-              Text('Aucune prospection terminée.'.tr(),
+              LText('Aucune prospection terminée.'.tr(),
                   style: TextStyle(color: cs.onSurfaceVariant)),
             ],
           ),
@@ -226,9 +228,9 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
                       borderRadius: BorderRadius.circular(16)),
                   child: ExpansionTile(
                     leading: Icon(Icons.folder_rounded, color: cs.primary),
-                    title : Text(dateFr,
+                    title : LText(dateFr,
                         style: t.titleMedium!.copyWith(fontWeight: FontWeight.w700)),
-                    subtitle: Text(
+                    subtitle: LText(
                       '${list.length} ${'prospect${list.length > 1 ? 's' : ''}'}',
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),
@@ -242,7 +244,7 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
                           padding: const EdgeInsets.only(top: 6, right: 4),
                           child: FilledButton.tonalIcon(
                             icon : const Icon(Icons.open_in_new_rounded),
-                            label: Text('Voir la fiche'.tr()),
+                            label: LText('Voir la fiche'.tr()),
                             onPressed: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -277,27 +279,27 @@ class _ProspectTile extends StatelessWidget {
       leading: CircleAvatar(
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
-        child: Text(p.name.isNotEmpty ? p.name[0].toUpperCase() : '?'),
+        child: LText(p.name.isNotEmpty ? p.name[0].toUpperCase() : '?'),
       ),
-      title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: LText(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(p.address, style: TextStyle(color: cs.onSurfaceVariant),
+          LText(p.address, style: TextStyle(color: cs.onSurfaceVariant),
               maxLines: 2, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
           Wrap(
             spacing: 6, runSpacing: -4,
             children: [
               Chip(
-                label: Text(p.category),
+                label: LText(p.category),
                 backgroundColor: cs.secondaryContainer,
                 labelStyle: TextStyle(color: cs.onSecondaryContainer),
                 visualDensity: VisualDensity.compact,
               ),
               if (p.status != null)
                 Chip(
-                  label: Text(p.status!),
+                  label: LText(p.status!),
                   backgroundColor: cs.tertiaryContainer,
                   labelStyle: TextStyle(color: cs.onTertiaryContainer),
                   visualDensity: VisualDensity.compact,

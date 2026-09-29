@@ -1,4 +1,7 @@
+import 'package:easy_localization/easy_localization.dart';
+import 'localized_text.dart';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 class FrostedCard extends StatelessWidget {
@@ -13,18 +16,27 @@ class FrostedCard extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(20),
     this.margin,
-    this.radius = 24,
+    this.radius = 18,
     this.surfaceColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = surfaceColor ?? Colors.white.withOpacity(0.10);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final color = surfaceColor ?? cs.surface.withOpacity(isDark ? .68 : .84);
 
     return Container(
       margin: margin,
-      decoration: const BoxDecoration(
-        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 18, offset: Offset(0, 8))],
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: cs.primary.withOpacity(.10),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
@@ -34,10 +46,9 @@ class FrostedCard extends StatelessWidget {
             padding: padding,
             decoration: BoxDecoration(
               color: color,
-              border: Border.all(color: Colors.white.withOpacity(0.20)),
+              border: Border.all(color: cs.outline.withOpacity(.72)),
               borderRadius: BorderRadius.circular(radius),
             ),
-            // ⬇️ This Material fixes "No Material widget found" for InkWell
             child: Material(
               type: MaterialType.transparency,
               child: child,

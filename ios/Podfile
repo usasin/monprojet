@@ -1,35 +1,44 @@
-platform :ios, '15.0'
-ENV['COCOAPODS_DISABLE_STATS'] = 'true'
-source 'https://cdn.cocoapods.org/'
+# Définissez la version minimale d'iOS pour votre application
+platform :ios, '14.0'
 
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+# Détermine où se trouve votre SDK Flutter
 def flutter_root
-  generated_xcode_build_settings = File.expand_path(File.join('..','Flutter','Generated.xcconfig'), __FILE__)
-  raise "#{generated_xcode_build_settings} must exist. Run `flutter pub get` first." unless File.exist?(generated_xcode_build_settings)
+  generated_xcode_build_settings = File.expand_path(
+    File.join('..', 'Flutter', 'Generated.xcconfig'),
+    __FILE__
+  )
+  unless File.exist?(generated_xcode_build_settings)
+    raise "#{generated_xcode_build_settings} must exist. " \
+          "Run 'flutter pub get' first."
+  end
   File.foreach(generated_xcode_build_settings) do |line|
-    m = line.match(/FLUTTER_ROOT\=(.*)/)
-    return m[1].strip if m
+    if line =~ /FLUTTER_ROOT\=(.*)/
+      return Regexp.last_match(1).strip
+    end
   end
   raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings}"
 end
 
-require File.expand_path(File.join('packages','flutter_tools','bin','podhelper'), flutter_root)
+# Charge le podhelper officiel de Flutter
+require File.expand_path(
+  File.join('packages', 'flutter_tools', 'bin', 'podhelper'),
+  flutter_root
+)
+
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  use_frameworks! :linkage => :static
+  use_frameworks!
   use_modular_headers!
+
+  # Installe tous les pods Flutter (dont App.framework)
   flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
 end
 
-# Nettoyage et réglages après installation des pods
 post_install do |installer|
   installer.pods_project.targets.each do |t|
     flutter_additional_ios_build_settings(t)
-    t.build_configurations.each do |config|
-      # iOS min 15 pour tous les pods
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
-      # Laisser Xcode choisir la bonne version de Swift (ne PAS forcer 5.0)
-      config.build_settings.delete('SWIFT_VERSION')
-    end
   end
 end

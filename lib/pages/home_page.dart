@@ -1,43 +1,64 @@
 // lib/pages/home_page.dart
+// UI 2026 — Glassmorphism, fond auroré animé, cartes glass premium
+// Aligné sur le style de select_prospects_page.dart
+
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../widgets/localized_text.dart';
 
 import '../providers/theme_provider.dart';
+import '../providers/org_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../logo_widget.dart';
 import 'select_prospects_page.dart';
 import 'map_page.dart';
 import 'reporting_page.dart';
 import 'all_prospects_finished_page.dart';
 import 'settings_screen.dart';
+import 'team_dashboard_screen.dart';
+import 'follow_up_center_page.dart';
 
-// même fond que le Login
 import '../widgets/brand_background.dart';
-// micro-interactions (tap scale)
+import '../widgets/workspace_badge.dart';
+import '../widgets/company_avatar.dart';
 import '../ui/bling.dart';
+import '../services/access_control.dart';
 
-/// Quadrillage discret
-class MapBackgroundPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.black.withOpacity(.04)
-      ..strokeWidth = 1;
-    const step = 50.0;
-    for (double x = 0; x <= size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (double y = 0; y <= size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+import '../theme/prospecto_colors.dart';
+// ════════════════════════════════════════════════════════════════
+//  Palette & tokens 2026 (partagée)
+// ════════════════════════════════════════════════════════════════
+class _P {
+  static const indigo      = ProspectoColors.blue;
+  static const violet      = ProspectoColors.green;
+  static const sky         = ProspectoColors.blueSoft;
+  static const mint        = ProspectoColors.green;
+  static const coral       = ProspectoColors.peach;
+  static const amber       = ProspectoColors.peachSoft;
+  static const onLight     = ProspectoColors.textPrimary;
+  static const onLightSub  = ProspectoColors.textSecondary;
+  static const onDark      = Color(0xFFF0F2FF);
+  static const onDarkSub   = Color(0xFF9099C4);
+
+  static LinearGradient get primary => const LinearGradient(
+    colors: [indigo, violet],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+  static LinearGradient get aurora => const LinearGradient(
+    colors: [ProspectoColors.backgroundTop, ProspectoColors.blueMist, ProspectoColors.peachMist],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 }
 
+// ════════════════════════════════════════════════════════════════
+//  Page
+// ════════════════════════════════════════════════════════════════
 class HomePage extends StatefulWidget {
   static const routeName = '/';
   const HomePage({Key? key}) : super(key: key);
@@ -45,12 +66,10 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
-  static bool _adShown = false;
-  InterstitialAd? _interstitial;
-  bool _ready = false;
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+  OrgProvider? _orgProvider;
+  bool _messageScheduled = false;
 
-  // douce anim du logo (comme le login)
   late final AnimationController _logoCtrl = AnimationController(
     vsync: this, duration: const Duration(seconds: 5),
   )..repeat();
@@ -58,232 +77,475 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     parent: _logoCtrl, curve: Curves.easeInOutSine,
   );
 
+  late final AnimationController _entranceCtrl = AnimationController(
+    vsync: this, duration: const Duration(milliseconds: 900),
+  )..forward();
+
   @override
   void initState() {
     super.initState();
-    MobileAds.instance.updateRequestConfiguration(
-      RequestConfiguration(testDeviceIds: ['6093B125AA558B88A894F10CE046FE69']),
-    );
-    _loadAd();
-  }
-
-  void _loadAd() {
-    if (_adShown) return;
-    InterstitialAd.load(
-      adUnitId: 'ca-app-pub-1360261396564293/5482834887',
-      request: const AdRequest(),
-      adLoadCallback: InterstitialAdLoadCallback(
-        onAdLoaded: (ad) {
-          _interstitial = ad;
-          _ready = true;
-          ad.fullScreenContentCallback = FullScreenContentCallback(
-            onAdDismissedFullScreenContent: (_) => ad.dispose(),
-            onAdFailedToShowFullScreenContent: (_, __) => ad.dispose(),
-          );
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_ready && !_adShown) {
-              _interstitial!.show();
-              _adShown = true;
-            }
-          });
-        },
-        onAdFailedToLoad: (err) => debugPrint('❌ Interstitial failed: $err'),
-      ),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null && mounted) {
+        final orgProvider = context.read<OrgProvider>();
+        _orgProvider = orgProvider;
+        orgProvider.addListener(_handleOrgProviderChange);
+        try {
+          await orgProvider.loadFromUser(uid);
+          _handleOrgProviderChange();
+        } catch (_) {
+          // Les écrans métier afficheront une erreur claire si la connexion
+          // empêche réellement l’accès aux données.
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
-    _interstitial?.dispose();
+    _orgProvider?.removeListener(_handleOrgProviderChange);
     _logoCtrl.dispose();
+    _entranceCtrl.dispose();
     super.dispose();
   }
 
-  /// Bouton premium (icônes Material Symbols Rounded)
-  Widget _navButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback onTap,
-    List<Color>? gradient,
-  }) {
-    final size = MediaQuery.of(context).size;
+  void _handleOrgProviderChange() {
+    if (!mounted || _messageScheduled) return;
+    final provider = _orgProvider;
+    final message = provider?.accessMessage;
+    if (provider == null || message == null || message.isEmpty) return;
+    _messageScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: LText(message)),
+      );
+      provider.consumeAccessMessage();
+      _messageScheduled = false;
+    });
+  }
+
+  // ════════ nav items ════════
+  List<_NavItem> _navItemsFor(OrgProvider org) {
+    final items = <_NavItem>[];
+    if (org.isTeam) {
+      items.add(
+        _NavItem(
+          org.isOwner
+              ? 'Direction de l’entreprise'
+              : org.canManageTeam
+                  ? 'Pilotage commercial'
+                  : 'Mon activité commerciale',
+          org.canManageTeam
+              ? Icons.supervisor_account_rounded
+              : Icons.event_available_rounded,
+          const [ProspectoColors.green, ProspectoColors.blue],
+          TeamDashboardScreen.routeName,
+        ),
+      );
+    }
+    if (!org.isTeam || org.canPlanAutonomously) {
+      items.add(const _NavItem(
+        'Planifier',
+        Icons.calendar_month_rounded,
+        [ProspectoColors.blue, ProspectoColors.green],
+        SelectProspectsPage.routeName,
+      ));
+    }
+    items.addAll(const [
+      _NavItem('Carte', Icons.map_rounded, [ProspectoColors.blueSoft, ProspectoColors.blue], MapPage.routeName),
+      _NavItem('Reporting', Icons.analytics_rounded, [ProspectoColors.green, ProspectoColors.blueSoft], ReportingPage.routeName),
+      _NavItem('Historique', Icons.history_rounded, [ProspectoColors.peachSoft, ProspectoColors.peach], AllProspectsFinishedPage.routeName),
+      _NavItem('Relances & exports', Icons.notifications_active_rounded, [ProspectoColors.green, ProspectoColors.blue], FollowUpCenterPage.routeName),
+      _NavItem('Paramètres', Icons.settings_rounded, [ProspectoColors.green, ProspectoColors.blue], SettingsScreen.routeName),
+    ]);
+    return items;
+  }
+
+  Future<void> _navigate(BuildContext ctx, _NavItem item) async {
+    if (item.route == SettingsScreen.routeName) {
+      Navigator.pushNamed(ctx, item.route);
+      return;
+    }
+    final ok = await AccessControl.requireLogin(ctx, reason: "Connecte-toi pour accéder à cette section.");
+    if (!ok) return;
+    if (ctx.mounted) Navigator.pushNamed(ctx, item.route);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme    = context.watch<ThemeProvider>().currentTheme;
+    final isDark   = theme.brightness == Brightness.dark;
+    final size     = MediaQuery.of(context).size;
     final isTablet = size.shortestSide >= 600;
-    final h = isTablet ? 80.0 : 68.0;
-    final r = isTablet ? 24.0 : 22.0;
+    final maxW     = size.width >= 1024 ? 900.0 : (isTablet ? 720.0 : 560.0);
+    final org = context.watch<OrgProvider>();
+    final navItems = _navItemsFor(org);
 
-    final grad = gradient ?? const [Color(0xFF0E2A66), Color(0xFF7A8CEB)];
+    // Logo flottant
+    final t   = _logoT.value * 2 * math.pi;
+    final s   = math.sin(t);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: PressableScale(
-        onTap: onTap,
-        child: Container(
-          height: h,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-                colors: grad, begin: Alignment.centerLeft, end: Alignment.centerRight),
-            borderRadius: BorderRadius.circular(r),
-            boxShadow: [BoxShadow(color: grad.last.withOpacity(.30), blurRadius: 16, offset: const Offset(0, 8))],
-          ),
-          child: Row(
-            children: [
-              // Bloc icône à gauche (clair)
-              Container(
-                width: h,
-                height: h,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.90),
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(r),
-                    bottomLeft: Radius.circular(r),
+    return Theme(
+      data: theme,
+      child: BrandBackground(
+        gradientColors: _P.aurora.colors,
+        blurSigma: 16,
+        animate: true,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          extendBodyBehindAppBar: true,
+          appBar: _buildAppBar(isDark, context),
+          body: SafeArea(
+            top: true,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxW),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 12),
+
+                      // ── Logo héro animé
+                      AnimatedBuilder(
+                        animation: _logoT,
+                        builder: (_, __) => Column(
+                          children: [
+                            Transform.translate(
+                              offset: Offset(0, s * 6),
+                              child: Transform.rotate(
+                                angle: s * .04,
+                                child: Transform.scale(
+                                  scale: 1 + s * .015,
+                                  child: const LogoWidget(),
+                                ),
+                              ),
+                            ),
+                            Container(
+                              width: 88, height: 10,
+                              margin: const EdgeInsets.only(top: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(.14 - .05 * s.abs()),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // ── Titre + tagline
+                      _GlassHeroCard(isDark: isDark),
+
+                      const SizedBox(height: 20),
+
+                      // ── Navigation cards
+                      ...List.generate(navItems.length, (i) {
+                        final item = navItems[i];
+                        final delay = i * 80;
+                        return AnimatedBuilder(
+                          animation: _entranceCtrl,
+                          builder: (_, __) {
+                            final t = (_entranceCtrl.value - delay / 900).clamp(0.0, 1.0);
+                            final curve = Curves.easeOutBack.transform(t);
+                            final opacity = curve.clamp(0.0, 1.0);
+                            return Transform.translate(
+                              offset: Offset(0, 30 * (1 - curve)),
+                              child: Opacity(
+                                opacity: opacity,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _NavCard(
+                                    item: item,
+                                    isDark: isDark,
+                                    onTap: () => _navigate(context, item),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      }),
+
+                      const SizedBox(height: 8),
+
+                      // ── Footer
+                      Center(
+                        child: LText(
+                          '© 2026 Digital Solutions AI  •  Confidentialité & RGPD',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? _P.onDarkSub : _P.onLightSub,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: Center(
-                  child: Icon(icon, size: isTablet ? 34 : 30, color: grad.first),
-                ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    shadows: [Shadow(blurRadius: 2, offset: Offset(1,1), color: Colors.black26)],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  PreferredSizeWidget _buildAppBar(bool isDark, BuildContext ctx) {
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      titleSpacing: 8,
+      flexibleSpace: ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(color: Colors.white.withOpacity(isDark ? 0.05 : 0.28)),
+        ),
+      ),
+      title: const WorkspaceBadge(compact: true),
+      centerTitle: false,
+      actions: [
+        IconButton(
+          icon: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded),
+          tooltip: 'Thème'.tr(),
+          onPressed: () => ctx.read<ThemeProvider>().toggleTheme(),
+        ),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Widgets
+// ════════════════════════════════════════════════════════════════
+
+class _NavItem {
+  final String label;
+  final IconData icon;
+  final List<Color> gradient;
+  final String route;
+  const _NavItem(this.label, this.icon, this.gradient, this.route);
+}
+
+// Hero card verre
+class _GlassHeroCard extends StatelessWidget {
+  final bool isDark;
+  const _GlassHeroCard({required this.isDark});
+
   @override
   Widget build(BuildContext context) {
-    final theme = context.watch<ThemeProvider>().currentTheme;
-
-    final size      = MediaQuery.of(context).size;
-    final shortest  = size.shortestSide;
-    final isTablet  = shortest >= 600;
-    final isDesktop = size.width >= 1024;
-    final maxW      = isDesktop ? 900.0 : (isTablet ? 720.0 : 560.0);
-
-    // anim logo (corrigé : on utilise math.sin)
-    final t   = _logoT.value * 2 * math.pi;
-    final s   = math.sin(t);
-    final dy  = s * 6.0;
-    final rot = s * .04;
-    final scl = 1.0 + (s * .015);
-
-    return Theme(
-      data: theme,
-      child: BrandBackground(
-        // même palette claire que le Login
-        gradientColors: const [Color(0xFFDEEFFF), Color(0xFFB3C7FF), Color(0xFFDCC8FF)],
-        blurSigma: 16,
-        animate: true,
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: CustomPaint(
-            painter: MapBackgroundPainter(),
-            child: SafeArea(
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxW),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SizedBox(height: 12),
-                        // Logo animé + ombre
-                        AnimatedBuilder(
-                          animation: _logoT,
-                          builder: (_, __) => Column(
-                            children: [
-                              Transform.translate(
-                                offset: Offset(0, dy),
-                                child: Transform.rotate(
-                                  angle: rot,
-                                  child: Transform.scale(
-                                    scale: scl,
-                                    child: const LogoWidget(),
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                width: 88,
-                                height: 10,
-                                margin: const EdgeInsets.only(top: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(.14 - .05 * s.abs()),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(height: 14),
-
-                        // Titre lisible (bleu dark)
-                        Text(
-                          'Prospecto',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: isTablet ? 40 : 32,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF0E2A66),
-                            shadows: const [Shadow(blurRadius: 6, offset: Offset(0,2), color: Colors.black26)],
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        _navButton(
-                          label: 'Planifier'.tr(),
-                          icon: Icons.calendar_month_rounded,
-                          onTap: () => Navigator.pushNamed(context, SelectProspectsPage.routeName),
-                        ),
-                        _navButton(
-                          label: 'Carte'.tr(),
-                          icon: Icons.map_rounded,
-                          onTap: () => Navigator.pushNamed(context, MapPage.routeName),
-                        ),
-                        _navButton(
-                          label: 'Reporting'.tr(),
-                          icon: Icons.analytics_rounded,
-                          onTap: () => Navigator.pushNamed(context, ReportingPage.routeName),
-                        ),
-                        _navButton(
-                          label: 'Historique'.tr(),
-                          icon: Icons.history_rounded,
-                          onTap: () => Navigator.pushNamed(context, AllProspectsFinishedPage.routeName),
-                        ),
-                        _navButton(
-                          label: 'Paramètres'.tr(),
-                          icon: Icons.settings_rounded,
-                          onTap: () => Navigator.pushNamed(context, SettingsScreen.routeName),
-                        ),
-
-                        const SizedBox(height: 24),
-                        Center(child: Text('Tous droits réservés © 2025'.tr(), style: theme.textTheme.bodySmall)),
-                        const SizedBox(height: 6),
-                        Center(child: Text('Conforme au RGPD de l’UE'.tr(), style: theme.textTheme.bodySmall)),
-                        const SizedBox(height: 8),
-                      ],
+    final org = context.watch<OrgProvider>();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.07) : Colors.white.withOpacity(0.60),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isDark ? Colors.white.withOpacity(0.13) : Colors.white.withOpacity(0.75),
+            ),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 24, offset: const Offset(0, 8)),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (org.isTeam) ...[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    CompanyAvatar(
+                      initials: org.initials,
+                      logoUrl: org.logoUrl,
+                      size: 54,
                     ),
+                    const SizedBox(width: 13),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const LText(
+                            'ENTREPRISE',
+                            style: TextStyle(
+                              color: _P.mint,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: .8,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          LText(
+                            org.orgName ?? 'Entreprise',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isDark ? _P.onDark : _P.onLight,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          if (org.slogan?.trim().isNotEmpty == true)
+                            LText(
+                              org.slogan!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: isDark ? _P.onDarkSub : _P.onLightSub,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          LText(
+                            org.roleLabel,
+                            style: const TextStyle(
+                              color: _P.mint,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+              ] else ...[
+                const WorkspaceBadge(),
+                const SizedBox(height: 14),
+              ],
+              ShaderMask(
+                shaderCallback: (r) => _P.primary.createShader(r),
+                child: LText(
+                  org.roleHomeTitle,
+                  style: const TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.w900,
+                    color: Colors.white,
                   ),
                 ),
               ),
+              const SizedBox(height: 6),
+              LText(
+                org.roleHomeSubtitle,
+                style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w500,
+                  color: isDark ? _P.onDarkSub : _P.onLightSub,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 14),
+              // Mini stat chips
+              Wrap(
+                spacing: 8, runSpacing: 8,
+                children: const [
+                  _StatChip(emoji: '📍', label: 'Géolocalisation OSM'),
+                  _StatChip(emoji: '✨', label: 'Optimisation IA'),
+                  _StatChip(emoji: '📊', label: 'Reporting intégré'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Stat chip
+class _StatChip extends StatelessWidget {
+  final String emoji, label;
+  const _StatChip({required this.emoji, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: _P.indigo.withOpacity(0.09),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _P.indigo.withOpacity(0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LText(emoji, style: const TextStyle(fontSize: 13)),
+          const SizedBox(width: 5),
+          LText(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _P.indigo)),
+        ],
+      ),
+    );
+  }
+}
+
+// Nav card avec glassmorphism + gradient icône
+class _NavCard extends StatelessWidget {
+  final _NavItem item;
+  final bool isDark;
+  final VoidCallback onTap;
+  const _NavCard({required this.item, required this.isDark, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            height: 68,
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.07) : Colors.white.withOpacity(0.65),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark ? Colors.white.withOpacity(0.13) : Colors.white.withOpacity(0.80),
+              ),
+              boxShadow: [
+                BoxShadow(color: item.gradient.first.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 6)),
+              ],
+            ),
+            child: Row(
+              children: [
+                // Icône gradient pill
+                Container(
+                  width: 68, height: 68,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: item.gradient,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(19),
+                      bottomLeft: Radius.circular(19),
+                    ),
+                  ),
+                  child: Icon(item.icon, color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: LText(
+                    item.label.tr(),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                      color: isDark ? _P.onDark : _P.onLight,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: isDark ? _P.onDarkSub : _P.onLightSub,
+                ),
+                const SizedBox(width: 16),
+              ],
             ),
           ),
         ),

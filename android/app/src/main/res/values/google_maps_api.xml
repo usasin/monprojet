@@ -1,4 +1,3 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="google_maps_key">AIzaSyBA3GpdMujbxxea9QzKYosJrtF1n6OAKX4</string>
-</resources>
+<!-- google_maps_key is supplied by Gradle from the build environment. -->
+<resources />

@@ -1,9 +1,290 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function teamActive(appId, orgId) {
+      return exists(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId))
+        && get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)).data.status == 'active'
+        && (!('subscriptionUntil' in get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)).data)
+          || get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)).data.subscriptionUntil == null
+          || (get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)).data.subscriptionUntil is timestamp
+            && get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)).data.subscriptionUntil > request.time));
+    }
+
+    function teamMember(appId, orgId) {
+      return signedIn()
+        && teamActive(appId, orgId)
+        && exists(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)/members/$(request.auth.uid)).data.status == 'active';
+    }
+
+    function teamRole(appId, orgId) {
+      return teamMember(appId, orgId)
+        ? get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)/members/$(request.auth.uid)).data.role
+        : null;
+    }
+
+
+    function teamRouteAutonomy(appId, orgId) {
+      return teamMember(appId, orgId)
+        && (teamRole(appId, orgId) in ['OWNER', 'MANAGER']
+          || (('routeAutonomy' in get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)/members/$(request.auth.uid)).data)
+            && get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)/members/$(request.auth.uid)).data.routeAutonomy == true));
+    }
+
+    function soloMember(orgId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/orgs/$(orgId)/members/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/orgs/$(orgId)/members/$(request.auth.uid)).data.status == 'active';
+    }
+
+    // Contenus éditoriaux affichés sans donnée personnelle.
+    match /about/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /informations/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /script/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Profil et données privées d'un utilisateur.
+    match /users/{uid} {
+      allow read: if isSelf(uid);
+      allow create: if isSelf(uid)
+        && !request.resource.data.keys().hasAny([
+          'entitlements', 'billing', 'purchaseTokens', 'serverRoles'
+        ]);
+      allow update: if isSelf(uid)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'entitlements', 'billing', 'purchaseTokens', 'serverRoles'
+        ]);
+      allow delete: if isSelf(uid);
+
+      match /prospects/{docId} {
+        allow read, write: if isSelf(uid);
+      }
+
+      match /plans/{docId} {
+        allow read, write: if isSelf(uid);
+      }
+
+      match /reminders/{docId} {
+        allow read, delete: if isSelf(uid);
+        allow create, update: if isSelf(uid)
+          && (!('uid' in request.resource.data) || request.resource.data.uid == uid);
+      }
+
+      // Compteur de quota exclusivement géré par les Cloud Functions.
+      match /serverUsage/{docId} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
+
+      match /{otherCollection}/{docId} {
+        allow read, write: if false;
+      }
+    }
+
+    // Espaces solo historiques créés directement par l'application.
+    match /orgs/{orgId} {
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.type == 'solo'
+        && request.resource.data.plan == 'free';
+      allow read: if soloMember(orgId)
+        || (signedIn() && resource.data.createdBy == request.auth.uid);
+      allow update: if signedIn() && resource.data.createdBy == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'updatedAt']);
+      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+
+      match /members/{memberUid} {
+        allow read: if soloMember(orgId);
+        allow create: if signedIn()
+          && memberUid == request.auth.uid
+          && getAfter(/databases/$(database)/documents/orgs/$(orgId)).data.createdBy == request.auth.uid
+          && request.resource.data.role == 'owner'
+          && request.resource.data.status == 'active';
+        allow update, delete: if false;
+      }
+    }
+
+    match /apps/{appId} {
+      allow read, write: if false;
+
+      // Formulaires : authentification requise et champs limités.
+      match /contactRequests/{requestId} {
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly([
+            'name', 'email', 'company', 'phone', 'message', 'createdAt', 'source'
+          ])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() <= 120
+          && request.resource.data.email is string
+          && request.resource.data.email.size() <= 254
+          && request.resource.data.message is string
+          && request.resource.data.message.size() <= 3000;
+        allow read, update, delete: if false;
+      }
+
+      match /inviteResendRequests/{requestId} {
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly([
+            'code', 'createdAt', 'requesterUid', 'requesterEmail'
+          ])
+          && request.resource.data.code is string
+          && request.resource.data.code.size() <= 80
+          && request.resource.data.requesterUid == request.auth.uid;
+        allow read, update, delete: if false;
+      }
+
+      match /activationResendRequests/{requestId} {
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly([
+            'email', 'orderId', 'createdAt', 'requesterUid', 'requesterEmail'
+          ])
+          && request.resource.data.requesterUid == request.auth.uid;
+        allow read, update, delete: if false;
+      }
+
+      // Organisations équipe : toute mutation sensible passe par Cloud Functions.
+      match /orgs/{orgId} {
+        allow read: if teamMember(appId, orgId);
+        allow write: if false;
+
+        match /members/{memberUid} {
+          allow read: if teamMember(appId, orgId);
+          allow write: if false;
+        }
+
+        match /invites/{inviteId} {
+          allow read: if teamRole(appId, orgId) in ['OWNER', 'MANAGER'];
+          allow write: if false;
+        }
+
+        // Répertoire de prospects partagé par tous les membres actifs.
+        match /prospects/{prospectId} {
+          allow read, create, update, delete: if teamMember(appId, orgId);
+        }
+
+        // Historique visible par les responsables. Les actions créées depuis
+        // le mobile doivent obligatoirement porter l'identité Firebase réelle.
+        match /activity/{activityId} {
+          allow read: if teamRole(appId, orgId) in ['OWNER', 'MANAGER'];
+          allow create: if teamMember(appId, orgId)
+            && request.resource.data.keys().hasOnly([
+              'action', 'message', 'actorUid', 'actorEmail', 'targetUid',
+              'prospectId', 'prospectName', 'createdAt'
+            ])
+            && request.resource.data.actorUid == request.auth.uid
+            && request.resource.data.action is string
+            && request.resource.data.action.size() <= 80
+            && request.resource.data.message is string
+            && request.resource.data.message.size() <= 500;
+          allow update, delete: if false;
+        }
+
+        // Chaque salarié conserve ses propres tournées et rappels dans
+        // l'organisation. Les responsables peuvent les consulter, mais seul
+        // le salarié concerné peut les modifier depuis l'application.
+        match /memberData/{memberUid} {
+          allow read: if teamMember(appId, orgId)
+            && (request.auth.uid == memberUid
+              || teamRole(appId, orgId) in ['OWNER', 'MANAGER']);
+          allow write: if false;
+
+          match /plans/{planId} {
+            allow read: if teamMember(appId, orgId)
+              && (request.auth.uid == memberUid
+                || teamRole(appId, orgId) in ['OWNER', 'MANAGER']);
+            allow create: if teamMember(appId, orgId)
+              && request.auth.uid == memberUid
+              && teamRouteAutonomy(appId, orgId);
+            allow update: if teamMember(appId, orgId)
+              && request.auth.uid == memberUid
+              && ((teamRouteAutonomy(appId, orgId)
+                    && !('assignedBy' in resource.data))
+                || (('assignedBy' in resource.data)
+                  && request.resource.data.prospectIds == resource.data.prospectIds
+                  && request.resource.data.assignedBy == resource.data.assignedBy
+                  && request.resource.data.assignmentSource == resource.data.assignmentSource
+                  && request.resource.data.assignmentLocked == resource.data.assignmentLocked
+                  && request.resource.data.ownerUid == memberUid
+                  && request.resource.data.orgId == orgId
+                  && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                    'reports', 'updatedAt', 'ownerUid', 'orgId', 'date'
+                  ])));
+            allow delete: if teamMember(appId, orgId)
+              && request.auth.uid == memberUid
+              && teamRouteAutonomy(appId, orgId)
+              && !('assignedBy' in resource.data);
+          }
+
+          match /appointments/{appointmentId} {
+            allow read: if teamMember(appId, orgId)
+              && (request.auth.uid == memberUid
+                || teamRole(appId, orgId) in ['OWNER', 'MANAGER']);
+            allow write: if false;
+          }
+
+          match /reminders/{reminderId} {
+            allow read: if teamMember(appId, orgId)
+              && (request.auth.uid == memberUid
+                || teamRole(appId, orgId) in ['OWNER', 'MANAGER']);
+            allow create, update: if teamMember(appId, orgId)
+              && request.auth.uid == memberUid
+              && (!('uid' in request.resource.data)
+                || request.resource.data.uid == memberUid);
+            allow delete: if teamMember(appId, orgId)
+              && request.auth.uid == memberUid;
+          }
+        }
+
+        match /{document=**} {
+          allow read: if teamMember(appId, orgId);
+          allow write: if false;
+        }
+      }
+
+      // Codes, licences et index internes exclusivement serveur.
+      match /activationCodes/{code} {
+        allow read, write: if false;
+      }
+      match /inviteCodes/{code} {
+        allow read, write: if false;
+      }
+      match /stripeCheckoutSessions/{sessionId} {
+        allow read, write: if false;
+      }
+      match /stripeSubscriptions/{subscriptionId} {
+        allow read, write: if false;
+      }
+      match /stripeActivationLookups/{lookupId} {
+        allow read, write: if false;
+      }
+      match /stripeEvents/{eventId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /playPurchaseTokens/{tokenHash} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }
-

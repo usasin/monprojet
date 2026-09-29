@@ -1,40 +1,45 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-  <!-- Si vous hébergez l’app sur un sous-chemin, modifiez la base href ici -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=Edge">
-  <meta name="description" content="Application Prospection GPS du Kit Commercial">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#5AACDB">
 
-  <!-- Google Sign-In Web client ID -->
+  <title>Prospecto – Prospection commerciale, tournées & reporting terrain</title>
+  <meta name="description" content="Prospecto est l’application de prospection commerciale terrain pour rechercher des prospects, planifier des tournées, organiser les visites, suivre les relances et analyser l’activité commerciale, seul ou en équipe.">
+  <meta name="keywords" content="prospection commerciale, prospection terrain, application commerciale, tournée commerciale, itinéraire commercial, recherche de prospects, CRM terrain, suivi prospects, reporting commercial, force de vente, équipe commerciale">
+  <meta name="author" content="Digital Solutions AI">
+  <meta name="robots" content="index,follow">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Prospecto – Organisez votre prospection terrain">
+  <meta property="og:description" content="Recherche de prospects, tournées commerciales, visites, relances, historique et reporting terrain dans une seule application.">
+  <meta property="og:site_name" content="Prospecto">
+  <meta property="og:locale" content="fr_FR">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Prospecto – Prospection commerciale terrain">
+  <meta name="twitter:description" content="Préparez vos tournées, trouvez vos prospects, suivez vos visites et pilotez votre activité commerciale.">
+
   <meta
-          name="google-signin-client_id"
-          content="163745254135-r9dvocoq91o2n4ulg3milp30b1gkdvu5.apps.googleusercontent.com"
-  />
+    name="google-signin-client_id"
+    content="163745254135-r9dvocoq91o2n4ulg3milp30b1gkdvu5.apps.googleusercontent.com"
+  >
   <script src="https://apis.google.com/js/platform.js" async defer></script>
 
-  <!-- iOS web app meta & icon -->
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="ai_prospect_gps">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Prospecto">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>ai_prospect_gps</title>
+  <link rel="icon" type="image/png" href="favicon.png">
   <link rel="manifest" href="manifest.json">
-
-  <!-- Google Maps JavaScript + Places Library -->
-  <script
-          src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBCNjj18RnJry3qgAEWB-Xk_ulA4TCgr70&libraries=places"
-          async defer>
-  </script>
 </head>
 <body>
-<!-- Flutter Web bootstrap -->
-<script src="flutter_bootstrap.js" async></script>
+  <noscript>Prospecto nécessite JavaScript pour fonctionner.</noscript>
+  <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
