@@ -124,7 +124,7 @@ class _OrgModeGateState extends State<OrgModeGate>
                           badgeColor: ProspectoColors.green,
                           icon: Icons.groups_rounded,
                           title: 'J’utilise Prospecto en entreprise',
-                          subtitle: 'Créer ou rejoindre une équipe commerciale',
+                          subtitle: 'Direction, manager ou commercial : l’espace s’adapte à votre rôle',
                           onTap: _openEnterprise,
                         ),
                         const SizedBox(height: 19),

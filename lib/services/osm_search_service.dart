@@ -66,7 +66,7 @@ class OSMSearchService {
 
   static const Map<String, String> _headers = {
     'User-Agent':
-        'Prospecto/1.3.11 (contact: contact@digitalsolutionsai.com)',
+        'Prospecto/1.3.12 (contact: contact@digitalsolutionsai.com)',
     'Accept': 'application/json',
   };
 

@@ -14,6 +14,7 @@ import 'package:provider/provider.dart';
 
 import '../models/prospect.dart';
 import '../providers/theme_provider.dart';
+import '../providers/org_provider.dart';
 import '../services/firestore_service.dart';
 import '../widgets/brand_background.dart';
 
@@ -343,6 +344,8 @@ class _ReportingPageState extends State<ReportingPage> {
   @override
   Widget build(BuildContext context) {
     final theme  = context.watch<ThemeProvider>().currentTheme;
+    final org = context.watch<OrgProvider>();
+    final canDeleteSharedProspects = !org.isTeam || org.canManageTeam;
     final isDark = theme.brightness == Brightness.dark;
     final size   = MediaQuery.of(context).size;
     final maxW   = size.width >= 1024 ? 900.0 : (size.shortestSide >= 600 ? 720.0 : 560.0);
@@ -465,7 +468,9 @@ class _ReportingPageState extends State<ReportingPage> {
                                           onChanged: () => setState(() => _dirty = true),
                                           onPickNextVisit: () => _pickNextVisit(p.id),
                                           onReplanify: () => _replanify(p.id),
-                                          onDelete: () => _deleteProspect(p.id),
+                                          onDelete: canDeleteSharedProspects
+                                              ? () => _deleteProspect(p.id)
+                                              : null,
                                         );
                                       }),
                                     ],
@@ -702,7 +707,8 @@ class _ProspectReportCard extends StatefulWidget {
   final TextEditingController phoneCtrl, emailCtrl, noteCtrl;
   final InputDecoration Function(String, IconData, ThemeData) dec;
   final ThemeData theme;
-  final VoidCallback onChanged, onPickNextVisit, onReplanify, onDelete;
+  final VoidCallback onChanged, onPickNextVisit, onReplanify;
+  final VoidCallback? onDelete;
 
   const _ProspectReportCard({
     super.key, required this.prospect, required this.report,
@@ -710,7 +716,7 @@ class _ProspectReportCard extends StatefulWidget {
     required this.roles, required this.statuses,
     required this.phoneCtrl, required this.emailCtrl, required this.noteCtrl,
     required this.dec, required this.theme, required this.onChanged,
-    required this.onPickNextVisit, required this.onReplanify, required this.onDelete,
+    required this.onPickNextVisit, required this.onReplanify, this.onDelete,
   });
 
   @override
@@ -849,7 +855,8 @@ class _ProspectReportCardState extends State<_ProspectReportCard> {
                   // Actions
                   Wrap(spacing: 8, runSpacing: 8, children: [
                     _ActionPill(icon: Icons.redo_rounded, label: 'Replanifier', onTap: widget.onReplanify, color: _P.sky),
-                    _ActionPill(icon: Icons.delete_outline_rounded, label: 'Supprimer', onTap: widget.onDelete, color: _P.coral),
+                    if (widget.onDelete != null)
+                      _ActionPill(icon: Icons.delete_outline_rounded, label: 'Supprimer', onTap: widget.onDelete!, color: _P.coral),
                   ]),
                 ]),
               )

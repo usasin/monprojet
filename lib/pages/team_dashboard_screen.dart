@@ -71,6 +71,10 @@ class _TeamDashboardScreenState extends State<TeamDashboardScreen> {
         : isManager
             ? 'Pilotage commercial'
             : 'Mon activité commerciale';
+    final requestedTab = ModalRoute.of(context)?.settings.arguments;
+    final initialTab = isManager && requestedTab is int
+        ? requestedTab.clamp(0, 3).toInt()
+        : 0;
     return BrandBackground(
       gradientColors: const [
         ProspectoColors.backgroundTop,
@@ -81,6 +85,7 @@ class _TeamDashboardScreenState extends State<TeamDashboardScreen> {
       animate: true,
       child: DefaultTabController(
         length: isManager ? 4 : 1,
+        initialIndex: initialTab,
         child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
@@ -92,34 +97,28 @@ class _TeamDashboardScreenState extends State<TeamDashboardScreen> {
             bottom: isManager
                 ? TabBar(
                     isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    dividerColor: Colors.transparent,
                     tabs: [
-                      Tab(
-                        child: LText(
-                          isOwner ? 'Vue entreprise' : 'Vue commerciale',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      _CockpitTab(
+                        icon: isOwner
+                            ? Icons.space_dashboard_rounded
+                            : Icons.today_rounded,
+                        label: isOwner ? 'Direction' : 'Aujourd’hui',
                       ),
-                      const Tab(
-                        child: LText(
-                          'Planning équipe',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      const _CockpitTab(
+                        icon: Icons.calendar_month_rounded,
+                        label: 'Planning',
                       ),
-                      Tab(
-                        child: LText(
-                          isOwner ? 'Équipe et accès' : 'Commerciaux',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      _CockpitTab(
+                        icon: isOwner
+                            ? Icons.admin_panel_settings_rounded
+                            : Icons.groups_2_rounded,
+                        label: isOwner ? 'Équipe & accès' : 'Commerciaux',
                       ),
-                      const Tab(
-                        child: LText(
-                          'Performance',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      const _CockpitTab(
+                        icon: Icons.insights_rounded,
+                        label: 'Performance',
                       ),
                     ],
                   )
@@ -471,6 +470,33 @@ class _OverviewTab extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _CockpitTab extends StatelessWidget {
+  const _CockpitTab({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tab(
+      height: 46,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 17),
+          const SizedBox(width: 6),
+          LText(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
     );
   }
 }

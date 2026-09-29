@@ -27,6 +27,11 @@ void main() {
       'Choisir cette offre',
       'Envoyer par e-mail',
       'Votre messagerie est ouverte. Appuyez sur Envoyer pour transmettre la demande.',
+      'Pulse du jour',
+      'Centre de pilotage',
+      'Votre entreprise, en un coup d’œil.',
+      'Votre équipe, prête pour le terrain.',
+      'Votre journée commerciale, sans dispersion.',
     ];
 
     for (final key in criticalKeys) {

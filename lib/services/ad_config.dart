@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'admin_test_mode.dart';
+
 class AdConfig {
   const AdConfig._();
 
@@ -25,14 +27,29 @@ class AdConfig {
   static const String _interstitialTest =
       'ca-app-pub-3940256099942544/1033173712';
 
-  static String get appOpen =>
-      _useProduction ? appOpenProduction : _appOpenTest;
+  static const String iosBanner = String.fromEnvironment('ADMOB_IOS_BANNER_ID');
+  static const String iosInterstitial =
+      String.fromEnvironment('ADMOB_IOS_INTERSTITIAL_ID');
+  static const String iosAppOpen = String.fromEnvironment('ADMOB_IOS_APP_OPEN_ID');
 
-  static String get bannerHome =>
-      _useProduction ? bannerHomeProduction : _bannerTest;
+  static bool get _isIOS => defaultTargetPlatform == TargetPlatform.iOS;
 
-  static String get interstitial =>
-      _useProduction ? interstitialProduction : _interstitialTest;
+  static bool get canUseAds => !kIsWeb && !AdminTestMode.enabled &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+       (_isIOS && (!_useProduction ||
+         (iosBanner.isNotEmpty && iosInterstitial.isNotEmpty))));
+
+  static String get appOpen => _isIOS
+      ? (_useProduction ? iosAppOpen : 'ca-app-pub-3940256099942544/5575463023')
+      : (_useProduction ? appOpenProduction : _appOpenTest);
+
+  static String get bannerHome => _isIOS
+      ? (_useProduction ? iosBanner : 'ca-app-pub-3940256099942544/2934735716')
+      : (_useProduction ? bannerHomeProduction : _bannerTest);
+
+  static String get interstitial => _isIOS
+      ? (_useProduction ? iosInterstitial : 'ca-app-pub-3940256099942544/4411468910')
+      : (_useProduction ? interstitialProduction : _interstitialTest);
 
   static bool get _useProduction => kReleaseMode && productionEnabled;
 }

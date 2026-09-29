@@ -174,9 +174,12 @@ service cloud.firestore {
           allow write: if false;
         }
 
-        // Répertoire de prospects partagé par tous les membres actifs.
+        // Répertoire partagé : tous les membres actifs peuvent travailler
+        // les prospects, mais une suppression structurelle est réservée aux
+        // responsables afin d'éviter une perte de données d'équipe.
         match /prospects/{prospectId} {
-          allow read, create, update, delete: if teamMember(appId, orgId);
+          allow read, create, update: if teamMember(appId, orgId);
+          allow delete: if teamRole(appId, orgId) in ['OWNER', 'MANAGER'];
         }
 
         // Historique visible par les responsables. Les actions créées depuis

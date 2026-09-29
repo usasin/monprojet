@@ -26,7 +26,7 @@ class WorkspaceBadge extends StatelessWidget {
         onTap: () => _showWorkspacePicker(context),
         borderRadius: BorderRadius.circular(999),
         child: Container(
-          constraints: BoxConstraints(maxWidth: compact ? 185 : 280),
+          constraints: BoxConstraints(maxWidth: compact ? 245 : 280),
           padding: EdgeInsets.fromLTRB(
             compact ? 8 : 10,
             compact ? 6 : 7,
@@ -77,15 +77,15 @@ class WorkspaceBadge extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    if (org.isTeam && !compact)
+                    if (org.isTeam)
                       LText(
                         '${org.orgName ?? 'Entreprise'} • ${org.roleLabel}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 10.5,
+                        style: TextStyle(
+                          fontSize: compact ? 9.5 : 10.5,
                           color: ProspectoColors.textSecondary,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                   ],

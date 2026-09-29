@@ -13,7 +13,7 @@ workflows:
           flutter build apk --release --dart-define-from-file=config/prod.json
       - name: 🛠 Build iOS IPA
         script: |
-          flutter build ipa --release --dart-define-from-file=config/prod.json
+          bash build_ios_release.sh
     artifacts:
       - build/app/outputs/flutter-apk/app-release.apk
       - build/ios/ipa/*.ipa

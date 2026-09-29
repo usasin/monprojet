@@ -57,3 +57,4 @@ functions/lib/
 **/*firebase-adminsdk*.json
 **/*.backup*
 config/stripe_enterprise.json
+ios/Flutter/AdMob.local.xcconfig

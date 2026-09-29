@@ -19,6 +19,18 @@ String prospectoTranslate(BuildContext context, String value) {
 String _translateDynamicEnglish(String value) {
   final patterns = <(RegExp, String Function(Match))>[
     (
+      RegExp(r'^Bonjour\s+(.+)$', caseSensitive: false),
+      (m) => 'Hello ${m.group(1)}',
+    ),
+    (
+      RegExp(r'^(\d+)/(\d+) visites sont reportées aujourd’hui\.$', caseSensitive: false),
+      (m) => '${m.group(1)}/${m.group(2)} visits have been reported today.',
+    ),
+    (
+      RegExp(r'^(\d+)/(\d+) visites prévues sont déjà reportées aujourd’hui\.$', caseSensitive: false),
+      (m) => '${m.group(1)}/${m.group(2)} planned visits have already been reported today.',
+    ),
+    (
       RegExp(r'^Rayon\s*:\s*(.+)$', caseSensitive: false),
       (m) => 'Radius: ${m.group(1)}',
     ),

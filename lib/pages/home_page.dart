@@ -25,6 +25,7 @@ import 'follow_up_center_page.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/workspace_badge.dart';
 import '../widgets/company_avatar.dart';
+import '../widgets/role_home_dashboard.dart';
 import '../ui/bling.dart';
 import '../services/access_control.dart';
 
@@ -209,67 +210,83 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     children: [
                       const SizedBox(height: 12),
 
-                      // ── Logo héro animé
-                      AnimatedBuilder(
-                        animation: _logoT,
-                        builder: (_, __) => Column(
-                          children: [
-                            Transform.translate(
-                              offset: Offset(0, s * 6),
-                              child: Transform.rotate(
-                                angle: s * .04,
-                                child: Transform.scale(
-                                  scale: 1 + s * .015,
-                                  child: const LogoWidget(),
-                                ),
-                              ),
-                            ),
-                            Container(
-                              width: 88, height: 10,
-                              margin: const EdgeInsets.only(top: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(.14 - .05 * s.abs()),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                            ),
-                          ],
+                      if (org.isTeam) ...[
+                        // L'espace entreprise n'est plus une copie du mode solo.
+                        // Chaque rôle dispose maintenant de son propre cockpit.
+                        RoleHomeDashboard(org: org, isDark: isDark),
+                        const SizedBox(height: 22),
+                        _NavCard(
+                          item: const _NavItem(
+                            'Paramètres',
+                            Icons.settings_rounded,
+                            [ProspectoColors.green, ProspectoColors.blue],
+                            SettingsScreen.routeName,
+                          ),
+                          isDark: isDark,
+                          onTap: () => Navigator.pushNamed(
+                            context,
+                            SettingsScreen.routeName,
+                          ),
                         ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // ── Titre + tagline
-                      _GlassHeroCard(isDark: isDark),
-
-                      const SizedBox(height: 20),
-
-                      // ── Navigation cards
-                      ...List.generate(navItems.length, (i) {
-                        final item = navItems[i];
-                        final delay = i * 80;
-                        return AnimatedBuilder(
-                          animation: _entranceCtrl,
-                          builder: (_, __) {
-                            final t = (_entranceCtrl.value - delay / 900).clamp(0.0, 1.0);
-                            final curve = Curves.easeOutBack.transform(t);
-                            final opacity = curve.clamp(0.0, 1.0);
-                            return Transform.translate(
-                              offset: Offset(0, 30 * (1 - curve)),
-                              child: Opacity(
-                                opacity: opacity,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: _NavCard(
-                                    item: item,
-                                    isDark: isDark,
-                                    onTap: () => _navigate(context, item),
+                      ] else ...[
+                        // Le mode personnel reste volontairement centré sur
+                        // l'action terrain : planifier, prospecter, reporter.
+                        AnimatedBuilder(
+                          animation: _logoT,
+                          builder: (_, __) => Column(
+                            children: [
+                              Transform.translate(
+                                offset: Offset(0, s * 6),
+                                child: Transform.rotate(
+                                  angle: s * .04,
+                                  child: Transform.scale(
+                                    scale: 1 + s * .015,
+                                    child: const LogoWidget(),
                                   ),
                                 ),
                               ),
-                            );
-                          },
-                        );
-                      }),
+                              Container(
+                                width: 88,
+                                height: 10,
+                                margin: const EdgeInsets.only(top: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(.14 - .05 * s.abs()),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _GlassHeroCard(isDark: isDark),
+                        const SizedBox(height: 20),
+                        ...List.generate(navItems.length, (i) {
+                          final item = navItems[i];
+                          final delay = i * 80;
+                          return AnimatedBuilder(
+                            animation: _entranceCtrl,
+                            builder: (_, __) {
+                              final t = (_entranceCtrl.value - delay / 900).clamp(0.0, 1.0);
+                              final curve = Curves.easeOutBack.transform(t);
+                              final opacity = curve.clamp(0.0, 1.0);
+                              return Transform.translate(
+                                offset: Offset(0, 30 * (1 - curve)),
+                                child: Opacity(
+                                  opacity: opacity,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: _NavCard(
+                                      item: item,
+                                      isDark: isDark,
+                                      onTap: () => _navigate(context, item),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        }),
+                      ],
 
                       const SizedBox(height: 8),
 

@@ -241,7 +241,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
   // ════════════ Ads ════════════
 
   void _loadBannerAd() {
-    if (_isPremium) return;
+    if (_isPremium || !AdConfig.canUseAds) return;
     _isBannerLoaded = false;
     _bannerAd?.dispose();
     _bannerAd = null;

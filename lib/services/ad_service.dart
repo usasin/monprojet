@@ -33,6 +33,7 @@ class AdService {
   bool get canRequestAds => _canRequestAds;
 
   Future<void> initialize() async {
+    if (!AdConfig.canUseAds) return;
     if (_initialized) return;
     _initialized = true;
 
@@ -66,6 +67,7 @@ class AdService {
   }
 
   Future<void> showPrivacyOptions() async {
+    if (!AdConfig.canUseAds) return;
     await ConsentForm.showPrivacyOptionsForm((_) {});
     _canRequestAds = await ConsentInformation.instance.canRequestAds();
     if (_canRequestAds) {

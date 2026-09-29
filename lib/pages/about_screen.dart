@@ -288,7 +288,7 @@ class AboutScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 22),
                       LText(
-                        'Prospecto • Version 1.3.11 (41)',
+                        'Prospecto • Version 1.3.12 (42)',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: ProspectoColors.textSecondary,
