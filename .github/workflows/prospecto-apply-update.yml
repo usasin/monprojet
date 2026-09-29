@@ -24,9 +24,9 @@ jobs:
           set -euo pipefail
           test -f .prospecto-update/update.ready || exit 0
           cat .prospecto-update/chunk_* > /tmp/prospecto_payload.b64
-          base64 --decode /tmp/prospecto_payload.b64 > /tmp/prospecto_payload.zip
+          base64 --decode /tmp/prospecto_payload.b64 > /tmp/prospecto_payload.tar.xz
           mkdir -p /tmp/prospecto_payload
-          unzip -q -o /tmp/prospecto_payload.zip -d /tmp/prospecto_payload
+          tar -xJf /tmp/prospecto_payload.tar.xz -C /tmp/prospecto_payload
           rsync -a /tmp/prospecto_payload/ ./
 
           # Remove obsolete/sensitive legacy files that are no longer part of the app.
