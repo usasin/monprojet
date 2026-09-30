@@ -27,9 +27,14 @@ class AdConfig {
   static const String _interstitialTest =
       'ca-app-pub-3940256099942544/1033173712';
 
-  static const String iosBanner = String.fromEnvironment('ADMOB_IOS_BANNER_ID');
-  static const String iosInterstitial =
-      String.fromEnvironment('ADMOB_IOS_INTERSTITIAL_ID');
+  static const String iosBanner = String.fromEnvironment(
+    'ADMOB_IOS_BANNER_ID',
+    defaultValue: 'ca-app-pub-1360261396564293/9926370092',
+  );
+  static const String iosInterstitial = String.fromEnvironment(
+    'ADMOB_IOS_INTERSTITIAL_ID',
+    defaultValue: 'ca-app-pub-1360261396564293/4594152361',
+  );
   static const String iosAppOpen = String.fromEnvironment('ADMOB_IOS_APP_OPEN_ID');
 
   static bool get _isIOS => defaultTargetPlatform == TargetPlatform.iOS;

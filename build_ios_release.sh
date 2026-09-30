@@ -4,10 +4,10 @@ script_dir="${BASH_SOURCE[0]%/*}"
 if [[ "$script_dir" == "${BASH_SOURCE[0]}" ]]; then script_dir=.; fi
 cd "$script_dir"
 
-# Set these three iOS-specific values in the macOS/CI environment.
-: "${ADMOB_IOS_APP_ID:?Missing iOS AdMob application ID}"
-: "${ADMOB_IOS_BANNER_ID:?Missing iOS AdMob banner ID}"
-: "${ADMOB_IOS_INTERSTITIAL_ID:?Missing iOS AdMob interstitial ID}"
+# Public AdMob identifiers created for Prospecto iOS; CI may override them.
+ADMOB_IOS_APP_ID="${ADMOB_IOS_APP_ID-ca-app-pub-1360261396564293~5907234032}"
+ADMOB_IOS_BANNER_ID="${ADMOB_IOS_BANNER_ID-ca-app-pub-1360261396564293/9926370092}"
+ADMOB_IOS_INTERSTITIAL_ID="${ADMOB_IOS_INTERSTITIAL_ID-ca-app-pub-1360261396564293/4594152361}"
 [[ "$ADMOB_IOS_APP_ID" =~ ^ca-app-pub-[0-9]+~[0-9]+$ ]] || exit 1
 for unit in "$ADMOB_IOS_BANNER_ID" "$ADMOB_IOS_INTERSTITIAL_ID"; do
   [[ "$unit" =~ ^ca-app-pub-[0-9]+/[0-9]+$ ]] || exit 1
