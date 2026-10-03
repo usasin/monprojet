@@ -10,10 +10,9 @@ workflows:
       xcode: latest
       cocoapods: default
       ios_signing:
-        # Bootstrap only: load the existing shared certificate with its valid profile.
-        # prepare_ios_signing.py installs the exact Prospecto App Store profile.
+        # Reuse the permanent Prospecto profile and the shared distribution certificate.
         provisioning_profiles:
-          - prono4_app_store_shared_2026
+          - prospecto_app_store_shared_2026
         certificates:
           - ios_distribution_all_apps_2026
       vars:
