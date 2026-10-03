@@ -33,3 +33,13 @@ La livraison complète Entreprise a remplacé la version GitHub 1.3.12+42. Le co
 - IPA : 61 351 354 octets ; SHA-256 `c55436b5bd9282a4946cae536a342109a903d1af1698e9c58f7a4b3264b64e36`. Conserver cette IPA pour réutiliser la compilation.
 - Avertissement Apple non bloquant : à partir d'avril 2027, la cible minimale iOS devra passer de 14 à 15. Aucun nouveau build n'est nécessaire pour cet avertissement sur l'envoi accepté du 3 octobre 2026.
 - Déploiement Firebase confirmé par la capture Cloud Shell fournie le 3 octobre 2026 (horloge affichée : 23 h 38) : `saveSalesOpportunity`, `updateEnterpriseDisplaySettings`, `deleteEnterpriseRecord` et `revokeOrgInvite` ont été mises à jour avec succès en `europe-west1` sur `quiz-commercial`. Les règles Firestore ont été compilées et publiées ; les index ont été déployés sur la base `(default)`. Les deux étapes affichent `Deploy complete!`, puis le script confirme « Backend 1.6.0 déployé sur quiz-commercial ». Ne pas répéter ce déploiement pour cette livraison sans nouvelle modification ou erreur constatée.
+
+## Préparation App Store du 3 octobre 2026
+
+- Connexion App Store Connect vérifiée. La fiche a été enregistrée en version `1.6.0` avec le build `51` (`bbfe41cf-1564-4ccc-9172-a689269f10d9`) ; la description française reflète les fonctions Solo et Entreprise actuelles.
+- État observé après enregistrement : `Prepare for Submission`. Aucune nouvelle soumission à App Review n'a été effectuée.
+- Le dossier de refus du build `23` mentionne un crash sur Map, une erreur Load dans Plan, des captures iPad contenant un cadre d'iPhone, des questions sur le modèle économique et une demande d'explication sur App Tracking Transparency.
+- Les trois captures iPad actuellement présentes contiennent encore des visuels marketing avec un cadre d'iPhone. Les remplacer par de véritables captures de la version actuelle sur iPad ; vérifier également les captures iPhone.
+- Contrôle du code du build 51 : `PurchaseDelivery.deliver` transmet toutes les transactions à `verifyGooglePlayPurchase`. Il manque une validation Apple pour les transactions iOS ; ne pas présenter les abonnements iOS comme vérifiés ou fonctionnels avant correction et essais.
+- Aucun appel explicite à App Tracking Transparency n'a été trouvé dans le code Dart ; le consentement publicitaire utilise Google UMP. Vérifier les déclarations de confidentialité et le comportement réel avant de répondre à Apple.
+- Les essais réels iPhone/iPad (connexion, Map, chargement du planning, achats et restauration) ainsi que la vérification du compte de démonstration restent à confirmer. Conserver le certificat et le profil permanents existants ; relancer Codemagic uniquement si une correction du binaire est nécessaire.
