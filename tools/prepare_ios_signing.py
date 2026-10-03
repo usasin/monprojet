@@ -15,9 +15,12 @@ PROFILE_NAME = "Prospecto App Store shared cert 2026"
 
 def apple(*args):
     result = subprocess.run(
-        ["app-store-connect", "--json", "--log-stream", "stderr", *args],
-        capture_output=True, text=True, check=True,
+        ["app-store-connect", *args, "--json", "--log-stream", "stderr"],
+        capture_output=True, text=True,
     )
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip()[-3000:])
+    # Structured resource JSON is printed on stdout; logs remain on stderr.
     return json.loads(result.stdout)
 
 def single(values, label):
