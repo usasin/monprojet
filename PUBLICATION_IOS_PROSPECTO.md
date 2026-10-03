@@ -28,5 +28,8 @@
 La livraison complète Entreprise a remplacé la version GitHub 1.3.12+42. Le commit de compilation contrôlé est `678c6e2af3a26dad619d883489c48f43584f2e5b`, conservé sur `prospecto-ios-1.6.0-51`. Le profil permanent a ensuite été enregistré dans Codemagic et configuré sur `main`.
 
 - Précontrôle natif réussi ; 93 tests Flutter réussis dans Codemagic ; compilation TypeScript et 9 tests unitaires backend réussis.
-- Build Codemagic : `6ac14ce37394575b200ac837`. Ne pas supposer qu'il est publié sans vérifier son résultat final et l'envoi Apple.
+- Build Codemagic : `6ac14ce37394575b200ac837`. IPA produite et vérifiée (bundle, version, Firebase inclus, SDK `iphoneos26.5`, signature et profil exacts).
+- Envoi App Store Connect réussi sans erreur le 3 octobre 2026 ; reçu Apple `bbfe41cf-1564-4ccc-9172-a689269f10d9`. La disponibilité TestFlight et les tests sur iPhone restent à confirmer.
+- IPA : 61 351 354 octets ; SHA-256 `c55436b5bd9282a4946cae536a342109a903d1af1698e9c58f7a4b3264b64e36`. Conserver cette IPA pour réutiliser la compilation.
+- Avertissement Apple non bloquant : à partir d'avril 2027, la cible minimale iOS devra passer de 14 à 15. Aucun nouveau build n'est nécessaire pour cet avertissement sur l'envoi accepté du 3 octobre 2026.
 - Les fonctions `saveSalesOpportunity`, `updateEnterpriseDisplaySettings`, `deleteEnterpriseRecord`, `revokeOrgInvite`, ainsi que les règles et index Firestore de cette livraison doivent être déployés sur `quiz-commercial` si ce n'est pas déjà fait. Le script `deployer_cloud_shell.sh quiz-commercial` prépare le déploiement ; il nécessite une session Google autorisée. Le 3 octobre, ce déploiement n'est pas encore confirmé.
