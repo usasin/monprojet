@@ -576,6 +576,31 @@ class _RoleHero extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
+          if (user?.email?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 3),
+            Row(
+              children: [
+                Icon(
+                  Icons.account_circle_rounded,
+                  size: 15,
+                  color: isDark ? Colors.white54 : ProspectoColors.blue,
+                ),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: LText(
+                    user!.email!.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isDark ? Colors.white60 : ProspectoColors.textSecondary,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 3),
           LText(
             role == 'OWNER'

@@ -59,6 +59,10 @@ String _translateDynamicEnglish(String value) {
       (m) => 'Signed in: ${m.group(1)}',
     ),
     (
+      RegExp(r'^Compte\s*:\s*(.+)$', caseSensitive: false),
+      (m) => 'Account: ${m.group(1)}',
+    ),
+    (
       RegExp(r'^Créé\s*:\s*(.+)$', caseSensitive: false),
       (m) => 'Created: ${m.group(1)}',
     ),

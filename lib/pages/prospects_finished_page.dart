@@ -66,7 +66,7 @@ class _ProspectsFinishedPageState extends State<ProspectsFinishedPage> {
     final sb = StringBuffer()..writeln('Prospections du $dayStr\n');
     for (var p in _list) {
       sb.writeln(
-          '${p.name} — ${p.address} — [${p.category}] — Statut : ${p.status ?? '-'} — Clôturé : ${p.finishedAt != null ? 'oui' : 'non'}');
+          '${p.name} — ${p.address} — [${p.category}] — Statut : ${p.status ?? '-'} — Compte rendu finalisé : ${p.finishedAt != null ? 'oui' : 'non'}');
     }
     final file = File('${_dateDir.path}/rapport-$dayStr.txt');
     await file.writeAsString(sb.toString());
@@ -149,7 +149,7 @@ class _ProspectsFinishedPageState extends State<ProspectsFinishedPage> {
                 if (present > 0) chip('Présent',  cs.primary,   present),
                 if (absent  > 0) chip('Absent',   cs.error,     absent),
                 if (rdv     > 0) chip('RDV',      cs.tertiary,  rdv),
-                if (closed  > 0) chip('Clôturé',  cs.secondary, closed),
+                if (closed  > 0) chip('Finalisé',  cs.secondary, closed),
               ],
             ),
           ],
@@ -338,7 +338,7 @@ class _ProspectCard extends StatelessWidget {
             if (p.prochaineVisite != null)
               line(Icons.calendar_month_rounded,
                   DateFormat.yMMMd('fr_FR').format(p.prochaineVisite!)),
-            line(Icons.flag_rounded, 'Clôturé : ${p.finishedAt != null ? 'oui' : 'non'}'),
+            line(Icons.flag_rounded, 'Compte rendu finalisé : ${p.finishedAt != null ? 'oui' : 'non'}'),
             if (p.finishedAt != null)
               line(Icons.timer_rounded,
                   DateFormat.yMMMd('fr_FR').add_Hm().format(p.finishedAt!)),

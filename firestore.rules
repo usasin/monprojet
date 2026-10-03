@@ -33,10 +33,15 @@ service cloud.firestore {
 
 
     function teamRouteAutonomy(appId, orgId) {
-      return teamMember(appId, orgId)
-        && (teamRole(appId, orgId) in ['OWNER', 'MANAGER']
-          || (('routeAutonomy' in get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)/members/$(request.auth.uid)).data)
-            && get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)/members/$(request.auth.uid)).data.routeAutonomy == true));
+      return teamMember(appId, orgId);
+    }
+
+    function canReadMemberData(appId, orgId, memberUid) {
+      return teamMember(appId, orgId) && (request.auth.uid == memberUid
+        || teamRole(appId, orgId) == 'OWNER'
+        || (teamRole(appId, orgId) == 'MANAGER'
+          && get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)/members/$(memberUid)).data.role == 'REP'
+          && get(/databases/$(database)/documents/apps/$(appId)/orgs/$(orgId)/members/$(memberUid)).data.get('managerUid', '') == request.auth.uid));
     }
 
     function soloMember(orgId) {
@@ -64,16 +69,26 @@ service cloud.firestore {
       allow read: if isSelf(uid);
       allow create: if isSelf(uid)
         && !request.resource.data.keys().hasAny([
-          'entitlements', 'billing', 'purchaseTokens', 'serverRoles'
+          'entitlements', 'billing', 'purchaseTokens', 'serverRoles', 'prospectoDeveloper'
         ]);
       allow update: if isSelf(uid)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          'entitlements', 'billing', 'purchaseTokens', 'serverRoles'
+          'entitlements', 'billing', 'purchaseTokens', 'serverRoles', 'prospectoDeveloper'
         ]);
       allow delete: if isSelf(uid);
 
       match /prospects/{docId} {
         allow read, write: if isSelf(uid);
+      }
+
+      // Personal sales are published by the callable, with immutable audit history.
+      match /opportunities/{opportunityId} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+        match /history/{revisionId} {
+          allow read: if isSelf(uid);
+          allow write: if false;
+        }
       }
 
       match /plans/{docId} {
@@ -165,27 +180,28 @@ service cloud.firestore {
         allow write: if false;
 
         match /members/{memberUid} {
-          allow read: if teamMember(appId, orgId);
+          allow read: if teamMember(appId, orgId) && (request.auth.uid == memberUid
+            || teamRole(appId, orgId) == 'OWNER'
+            || (teamRole(appId, orgId) == 'MANAGER' && resource.data.get('managerUid', '') == request.auth.uid && resource.data.role == 'REP'));
           allow write: if false;
         }
 
         match /invites/{inviteId} {
-          allow read: if teamRole(appId, orgId) in ['OWNER', 'MANAGER'];
+          allow read: if teamRole(appId, orgId) == 'OWNER';
           allow write: if false;
         }
 
         // Répertoire partagé : tous les membres actifs peuvent travailler
-        // les prospects, mais une suppression structurelle est réservée aux
-        // responsables afin d'éviter une perte de données d'équipe.
+        // les prospects. La suppression passe par le serveur pour conserver une archive.
         match /prospects/{prospectId} {
           allow read, create, update: if teamMember(appId, orgId);
-          allow delete: if teamRole(appId, orgId) in ['OWNER', 'MANAGER'];
+          allow delete: if false;
         }
 
         // Historique visible par les responsables. Les actions créées depuis
         // le mobile doivent obligatoirement porter l'identité Firebase réelle.
         match /activity/{activityId} {
-          allow read: if teamRole(appId, orgId) in ['OWNER', 'MANAGER'];
+          allow read: if teamRole(appId, orgId) == 'OWNER';
           allow create: if teamMember(appId, orgId)
             && request.resource.data.keys().hasOnly([
               'action', 'message', 'actorUid', 'actorEmail', 'targetUid',
@@ -203,15 +219,11 @@ service cloud.firestore {
         // l'organisation. Les responsables peuvent les consulter, mais seul
         // le salarié concerné peut les modifier depuis l'application.
         match /memberData/{memberUid} {
-          allow read: if teamMember(appId, orgId)
-            && (request.auth.uid == memberUid
-              || teamRole(appId, orgId) in ['OWNER', 'MANAGER']);
+          allow read: if canReadMemberData(appId, orgId, memberUid);
           allow write: if false;
 
           match /plans/{planId} {
-            allow read: if teamMember(appId, orgId)
-              && (request.auth.uid == memberUid
-                || teamRole(appId, orgId) in ['OWNER', 'MANAGER']);
+            allow read: if canReadMemberData(appId, orgId, memberUid);
             allow create: if teamMember(appId, orgId)
               && request.auth.uid == memberUid
               && teamRouteAutonomy(appId, orgId);
@@ -235,17 +247,23 @@ service cloud.firestore {
               && !('assignedBy' in resource.data);
           }
 
+          // Opportunités privées du commercial ; responsables limités à leur équipe.
+          match /opportunities/{opportunityId} {
+            allow read: if canReadMemberData(appId, orgId, memberUid);
+            allow write: if false;
+            match /history/{eventId} {
+              allow read: if canReadMemberData(appId, orgId, memberUid);
+              allow write: if false;
+            }
+          }
+
           match /appointments/{appointmentId} {
-            allow read: if teamMember(appId, orgId)
-              && (request.auth.uid == memberUid
-                || teamRole(appId, orgId) in ['OWNER', 'MANAGER']);
+            allow read: if canReadMemberData(appId, orgId, memberUid);
             allow write: if false;
           }
 
           match /reminders/{reminderId} {
-            allow read: if teamMember(appId, orgId)
-              && (request.auth.uid == memberUid
-                || teamRole(appId, orgId) in ['OWNER', 'MANAGER']);
+            allow read: if canReadMemberData(appId, orgId, memberUid);
             allow create, update: if teamMember(appId, orgId)
               && request.auth.uid == memberUid
               && (!('uid' in request.resource.data)
@@ -256,7 +274,7 @@ service cloud.firestore {
         }
 
         match /{document=**} {
-          allow read: if teamMember(appId, orgId);
+          allow read: if false;
           allow write: if false;
         }
       }

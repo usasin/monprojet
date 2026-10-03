@@ -1,3 +1,6 @@
+import '../sales/solo_sales_pages.dart';
+import '../sales/enterprise_workspace.dart';
+import '../widgets/enterprise_overview.dart';
 // lib/pages/home_page.dart
 // UI 2026 — Glassmorphism, fond auroré animé, cartes glass premium
 // Aligné sur le style de select_prospects_page.dart
@@ -8,11 +11,14 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
+
 import '../widgets/localized_text.dart';
 
 import '../providers/theme_provider.dart';
 import '../providers/org_provider.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
+
 import '../logo_widget.dart';
 import 'select_prospects_page.dart';
 import 'map_page.dart';
@@ -20,41 +26,45 @@ import 'reporting_page.dart';
 import 'all_prospects_finished_page.dart';
 import 'settings_screen.dart';
 import 'team_dashboard_screen.dart';
+import 'org_members_screen.dart';
 import 'follow_up_center_page.dart';
 
 import '../widgets/brand_background.dart';
 import '../widgets/workspace_badge.dart';
-import '../widgets/company_avatar.dart';
-import '../widgets/role_home_dashboard.dart';
 import '../ui/bling.dart';
 import '../services/access_control.dart';
 
 import '../theme/prospecto_colors.dart';
+
 // ════════════════════════════════════════════════════════════════
 //  Palette & tokens 2026 (partagée)
 // ════════════════════════════════════════════════════════════════
 class _P {
-  static const indigo      = ProspectoColors.blue;
-  static const violet      = ProspectoColors.green;
-  static const sky         = ProspectoColors.blueSoft;
-  static const mint        = ProspectoColors.green;
-  static const coral       = ProspectoColors.peach;
-  static const amber       = ProspectoColors.peachSoft;
-  static const onLight     = ProspectoColors.textPrimary;
-  static const onLightSub  = ProspectoColors.textSecondary;
-  static const onDark      = Color(0xFFF0F2FF);
-  static const onDarkSub   = Color(0xFF9099C4);
+  static const indigo = ProspectoColors.blue;
+  static const violet = ProspectoColors.green;
+  static const sky = ProspectoColors.blueSoft;
+  static const mint = ProspectoColors.green;
+  static const coral = ProspectoColors.peach;
+  static const amber = ProspectoColors.peachSoft;
+  static const onLight = ProspectoColors.textPrimary;
+  static const onLightSub = ProspectoColors.textSecondary;
+  static const onDark = Color(0xFFF0F2FF);
+  static const onDarkSub = Color(0xFF9099C4);
 
   static LinearGradient get primary => const LinearGradient(
-    colors: [indigo, violet],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+        colors: [indigo, violet],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
   static LinearGradient get aurora => const LinearGradient(
-    colors: [ProspectoColors.backgroundTop, ProspectoColors.blueMist, ProspectoColors.peachMist],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+        colors: [
+          ProspectoColors.backgroundTop,
+          ProspectoColors.blueMist,
+          ProspectoColors.peachMist,
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -62,6 +72,12 @@ class _P {
 // ════════════════════════════════════════════════════════════════
 class HomePage extends StatefulWidget {
   static const routeName = '/';
+  static bool usesEnterpriseWorkspace({
+    required bool signedIn,
+    required bool isTeam,
+    required String? orgId,
+  }) =>
+      signedIn && isTeam && orgId != null;
   const HomePage({Key? key}) : super(key: key);
   @override
   State<HomePage> createState() => _HomePageState();
@@ -70,16 +86,21 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   OrgProvider? _orgProvider;
   bool _messageScheduled = false;
+  final ScrollController _homeScrollController = ScrollController();
+  String? _workspaceKey;
 
   late final AnimationController _logoCtrl = AnimationController(
-    vsync: this, duration: const Duration(seconds: 5),
+    vsync: this,
+    duration: const Duration(seconds: 5),
   )..repeat();
   late final Animation<double> _logoT = CurvedAnimation(
-    parent: _logoCtrl, curve: Curves.easeInOutSine,
+    parent: _logoCtrl,
+    curve: Curves.easeInOutSine,
   );
 
   late final AnimationController _entranceCtrl = AnimationController(
-    vsync: this, duration: const Duration(milliseconds: 900),
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
   )..forward();
 
   @override
@@ -105,22 +126,39 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void dispose() {
     _orgProvider?.removeListener(_handleOrgProviderChange);
+    _homeScrollController.dispose();
     _logoCtrl.dispose();
     _entranceCtrl.dispose();
     super.dispose();
   }
 
   void _handleOrgProviderChange() {
-    if (!mounted || _messageScheduled) return;
+    if (!mounted) return;
     final provider = _orgProvider;
-    final message = provider?.accessMessage;
-    if (provider == null || message == null || message.isEmpty) return;
+    if (provider == null) return;
+
+    // Un changement Personnel <-> Entreprise modifie fortement la hauteur de
+    // l'accueil. On repart toujours en haut pour éviter de conserver une
+    // ancienne position de scroll qui peut laisser un écran visuellement vide.
+    final nextWorkspaceKey = provider.isTeam
+        ? 'team:${provider.orgId ?? ''}:${provider.role ?? ''}'
+        : 'personal';
+    if (_workspaceKey != nextWorkspaceKey) {
+      _workspaceKey = nextWorkspaceKey;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_homeScrollController.hasClients) return;
+        _homeScrollController.jumpTo(0);
+      });
+    }
+
+    final message = provider.accessMessage;
+    if (_messageScheduled || message == null || message.isEmpty) return;
     _messageScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: LText(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: LText(message)));
       provider.consumeAccessMessage();
       _messageScheduled = false;
     });
@@ -130,62 +168,283 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   List<_NavItem> _navItemsFor(OrgProvider org) {
     final items = <_NavItem>[];
     if (org.isTeam) {
+      if (org.isOwner) {
+        items.addAll(const [
+          _NavItem(
+              'Équipe & accès',
+              Icons.groups,
+              [
+                ProspectoColors.green,
+                ProspectoColors.blue,
+              ],
+              OrgMembersScreen.routeName),
+          _NavItem(
+            'Planning équipe',
+            Icons.calendar_month,
+            [ProspectoColors.green, ProspectoColors.blue],
+            TeamDashboardScreen.routeName,
+            tab: 1,
+          ),
+          _NavItem(
+              'Activité du jour',
+              Icons.today,
+              [
+                ProspectoColors.green,
+                ProspectoColors.blue,
+              ],
+              TeamDashboardScreen.routeName),
+          _NavItem(
+            'Performance',
+            Icons.insights,
+            [ProspectoColors.green, ProspectoColors.blue],
+            TeamDashboardScreen.routeName,
+            tab: 3,
+          ),
+        ]);
+      } else if (org.canManageTeam) {
+        items.addAll(const [
+          _NavItem(
+            'Mes commerciaux',
+            Icons.groups,
+            [ProspectoColors.green, ProspectoColors.blue],
+            TeamDashboardScreen.routeName,
+            tab: 2,
+          ),
+          _NavItem(
+            'Planning équipe',
+            Icons.calendar_month,
+            [ProspectoColors.green, ProspectoColors.blue],
+            TeamDashboardScreen.routeName,
+            tab: 1,
+          ),
+          _NavItem(
+            'Performance & reporting',
+            Icons.insights,
+            [ProspectoColors.green, ProspectoColors.blue],
+            TeamDashboardScreen.routeName,
+            tab: 3,
+          ),
+        ]);
+      } else {
+        items.add(
+          const _NavItem(
+            'Mes tournées & RDV',
+            Icons.event_available,
+            [ProspectoColors.green, ProspectoColors.blue],
+            TeamDashboardScreen.routeName,
+          ),
+        );
+      }
+    }
+    if (org.isTeam && org.canManageTeam) {
       items.add(
-        _NavItem(
-          org.isOwner
-              ? 'Direction de l’entreprise'
-              : org.canManageTeam
-                  ? 'Pilotage commercial'
-                  : 'Mon activité commerciale',
-          org.canManageTeam
-              ? Icons.supervisor_account_rounded
-              : Icons.event_available_rounded,
-          const [ProspectoColors.green, ProspectoColors.blue],
-          TeamDashboardScreen.routeName,
+        const _NavItem(
+            'Mon activité terrain',
+            Icons.person_pin_circle,
+            [
+              ProspectoColors.blue,
+              ProspectoColors.green,
+            ],
+            '/my_field_activity'),
+      );
+      return items;
+    }
+    if (!org.isTeam || org.canPlanAutonomously) {
+      items.add(
+        const _NavItem(
+          'Créer ma tournée',
+          Icons.calendar_month_rounded,
+          [ProspectoColors.blue, ProspectoColors.green],
+          SelectProspectsPage.routeName,
         ),
       );
     }
-    if (!org.isTeam || org.canPlanAutonomously) {
-      items.add(const _NavItem(
-        'Planifier',
-        Icons.calendar_month_rounded,
-        [ProspectoColors.blue, ProspectoColors.green],
-        SelectProspectsPage.routeName,
-      ));
-    }
     items.addAll(const [
-      _NavItem('Carte', Icons.map_rounded, [ProspectoColors.blueSoft, ProspectoColors.blue], MapPage.routeName),
-      _NavItem('Reporting', Icons.analytics_rounded, [ProspectoColors.green, ProspectoColors.blueSoft], ReportingPage.routeName),
-      _NavItem('Historique', Icons.history_rounded, [ProspectoColors.peachSoft, ProspectoColors.peach], AllProspectsFinishedPage.routeName),
-      _NavItem('Relances & exports', Icons.notifications_active_rounded, [ProspectoColors.green, ProspectoColors.blue], FollowUpCenterPage.routeName),
-      _NavItem('Paramètres', Icons.settings_rounded, [ProspectoColors.green, ProspectoColors.blue], SettingsScreen.routeName),
+      _NavItem(
+          'Mes prospects',
+          Icons.people,
+          [
+            ProspectoColors.green,
+            ProspectoColors.blue,
+          ],
+          SoloProspectsPage.routeName),
+      _NavItem(
+          'Carte',
+          Icons.map_rounded,
+          [
+            ProspectoColors.blueSoft,
+            ProspectoColors.blue,
+          ],
+          MapPage.routeName),
+      _NavItem(
+          'Reporting',
+          Icons.analytics_rounded,
+          [
+            ProspectoColors.green,
+            ProspectoColors.blueSoft,
+          ],
+          ReportingPage.routeName),
+      _NavItem(
+          'Historique',
+          Icons.history_rounded,
+          [
+            ProspectoColors.peachSoft,
+            ProspectoColors.peach,
+          ],
+          AllProspectsFinishedPage.routeName),
+      _NavItem(
+        'Mes relances',
+        Icons.notifications_active_rounded,
+        [ProspectoColors.green, ProspectoColors.blue],
+        FollowUpCenterPage.routeName,
+      ),
+      _NavItem(
+          'Paramètres',
+          Icons.settings_rounded,
+          [
+            ProspectoColors.green,
+            ProspectoColors.blue,
+          ],
+          SettingsScreen.routeName),
     ]);
     return items;
   }
 
   Future<void> _navigate(BuildContext ctx, _NavItem item) async {
-    if (item.route == SettingsScreen.routeName) {
-      Navigator.pushNamed(ctx, item.route);
+    if (item.route == '/my_field_activity') {
+      final personal = const [
+        _NavItem(
+            'Créer ma tournée',
+            Icons.alt_route,
+            [
+              ProspectoColors.blue,
+              ProspectoColors.green,
+            ],
+            SelectProspectsPage.routeName),
+        _NavItem(
+            'Mes tournées & RDV',
+            Icons.event,
+            [
+              ProspectoColors.green,
+              ProspectoColors.blue,
+            ],
+            TeamDashboardScreen.routeName),
+        _NavItem(
+            'Mes prospects',
+            Icons.people,
+            [
+              ProspectoColors.green,
+              ProspectoColors.blue,
+            ],
+            SelectProspectsPage.routeName),
+        _NavItem(
+            'Carte',
+            Icons.map,
+            [
+              ProspectoColors.blue,
+              ProspectoColors.green,
+            ],
+            MapPage.routeName),
+        _NavItem(
+            'Reporting',
+            Icons.analytics,
+            [
+              ProspectoColors.green,
+              ProspectoColors.blue,
+            ],
+            ReportingPage.routeName),
+        _NavItem(
+            'Historique',
+            Icons.history,
+            [
+              ProspectoColors.peach,
+              ProspectoColors.peachSoft,
+            ],
+            AllProspectsFinishedPage.routeName),
+        _NavItem(
+            'Mes relances',
+            Icons.notifications,
+            [
+              ProspectoColors.green,
+              ProspectoColors.blue,
+            ],
+            FollowUpCenterPage.routeName),
+      ];
+      await Navigator.push(
+        ctx,
+        MaterialPageRoute<void>(
+          builder: (pageContext) => Scaffold(
+            appBar: AppBar(title: const LText('Mon activité terrain')),
+            body: ListView(
+              padding: const EdgeInsets.all(16),
+              children: personal
+                  .map(
+                    (entry) => ListTile(
+                      leading: Icon(entry.icon),
+                      title: LText(entry.label),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.pushNamed(
+                        pageContext,
+                        entry.route,
+                        arguments: entry.route == TeamDashboardScreen.routeName
+                            ? const {'personal': true}
+                            : null,
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+      );
       return;
     }
-    final ok = await AccessControl.requireLogin(ctx, reason: "Connecte-toi pour accéder à cette section.");
+
+    if (item.route == SettingsScreen.routeName) {
+      Navigator.pushNamed(ctx, item.route, arguments: item.tab);
+      return;
+    }
+    final ok = await AccessControl.requireLogin(
+      ctx,
+      reason: "Connecte-toi pour accéder à cette section.",
+    );
     if (!ok) return;
-    if (ctx.mounted) Navigator.pushNamed(ctx, item.route);
+    if (ctx.mounted)
+      Navigator.pushNamed(
+        ctx,
+        item.route,
+        arguments: item.route == TeamDashboardScreen.routeName
+            ? {'tab': item.tab ?? 0, 'direct': true}
+            : item.tab,
+      );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme    = context.watch<ThemeProvider>().currentTheme;
-    final isDark   = theme.brightness == Brightness.dark;
-    final size     = MediaQuery.of(context).size;
+    final theme = context.watch<ThemeProvider>().currentTheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final size = MediaQuery.of(context).size;
     final isTablet = size.shortestSide >= 600;
-    final maxW     = size.width >= 1024 ? 900.0 : (isTablet ? 720.0 : 560.0);
+    final maxW = size.width >= 1024 ? 900.0 : (isTablet ? 720.0 : 560.0);
     final org = context.watch<OrgProvider>();
+    if (HomePage.usesEnterpriseWorkspace(
+      signedIn: FirebaseAuth.instance.currentUser != null,
+      isTeam: org.isTeam,
+      orgId: org.orgId,
+    )) {
+      return Theme(
+        data: theme,
+        child: EnterpriseWorkspace(
+          key: ValueKey(
+              'workspace:${FirebaseAuth.instance.currentUser?.uid}:${org.isTeam}:${org.orgId}:${org.role}'),
+        ),
+      );
+    }
     final navItems = _navItemsFor(org);
 
     // Logo flottant
-    final t   = _logoT.value * 2 * math.pi;
-    final s   = math.sin(t);
+    final t = _logoT.value * 2 * math.pi;
+    final s = math.sin(t);
 
     return Theme(
       data: theme,
@@ -204,6 +463,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxW),
                 child: SingleChildScrollView(
+                  controller: _homeScrollController,
+                  key: ValueKey(
+                    org.isTeam ? 'home-team-${org.orgId}' : 'home-personal',
+                  ),
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -211,23 +474,26 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       const SizedBox(height: 12),
 
                       if (org.isTeam) ...[
-                        // L'espace entreprise n'est plus une copie du mode solo.
-                        // Chaque rôle dispose maintenant de son propre cockpit.
-                        RoleHomeDashboard(org: org, isDark: isDark),
-                        const SizedBox(height: 22),
-                        _NavCard(
-                          item: const _NavItem(
-                            'Paramètres',
-                            Icons.settings_rounded,
-                            [ProspectoColors.green, ProspectoColors.blue],
-                            SettingsScreen.routeName,
-                          ),
-                          isDark: isDark,
-                          onTap: () => Navigator.pushNamed(
-                            context,
-                            SettingsScreen.routeName,
-                          ),
+                        // Accueil Entreprise volontairement synchrone et robuste.
+                        // Les statistiques détaillées restent dans le cockpit
+                        // Direction / Pilotage, mais l'utilisateur ne peut jamais
+                        // se retrouver devant une page vide si une lecture réseau
+                        // tarde ou échoue.
+                        EnterpriseOverview(
+                          key: ValueKey('overview-${org.orgId}-${org.role}'),
                         ),
+                        const SizedBox(height: 20),
+                        ...List.generate(navItems.length, (i) {
+                          final item = navItems[i];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _NavCard(
+                              item: item,
+                              isDark: isDark,
+                              onTap: () => _navigate(context, item),
+                            ),
+                          );
+                        }),
                       ] else ...[
                         // Le mode personnel reste volontairement centré sur
                         // l'action terrain : planifier, prospecter, reporter.
@@ -250,7 +516,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                 height: 10,
                                 margin: const EdgeInsets.only(top: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(.14 - .05 * s.abs()),
+                                  color: Colors.black.withOpacity(
+                                    .14 - .05 * s.abs(),
+                                  ),
                                   borderRadius: BorderRadius.circular(999),
                                 ),
                               ),
@@ -266,7 +534,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           return AnimatedBuilder(
                             animation: _entranceCtrl,
                             builder: (_, __) {
-                              final t = (_entranceCtrl.value - delay / 900).clamp(0.0, 1.0);
+                              final t = (_entranceCtrl.value - delay / 900)
+                                  .clamp(0.0, 1.0);
                               final curve = Curves.easeOutBack.transform(t);
                               final opacity = curve.clamp(0.0, 1.0);
                               return Transform.translate(
@@ -319,14 +588,24 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       flexibleSpace: ClipRect(
         child: BackdropFilter(
           filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(color: Colors.white.withOpacity(isDark ? 0.05 : 0.28)),
+          child: Container(
+            color: Colors.white.withOpacity(isDark ? 0.05 : 0.28),
+          ),
         ),
       ),
       title: const WorkspaceBadge(compact: true),
       centerTitle: false,
       actions: [
+        if (ctx.watch<OrgProvider>().isTeam)
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Paramètres',
+            onPressed: () => Navigator.pushNamed(ctx, SettingsScreen.routeName),
+          ),
         IconButton(
-          icon: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded),
+          icon: Icon(
+            isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+          ),
           tooltip: 'Thème'.tr(),
           onPressed: () => ctx.read<ThemeProvider>().toggleTheme(),
         ),
@@ -345,7 +624,8 @@ class _NavItem {
   final IconData icon;
   final List<Color> gradient;
   final String route;
-  const _NavItem(this.label, this.icon, this.gradient, this.route);
+  final int? tab;
+  const _NavItem(this.label, this.icon, this.gradient, this.route, {this.tab});
 }
 
 // Hero card verre
@@ -363,86 +643,35 @@ class _GlassHeroCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.07) : Colors.white.withOpacity(0.60),
+            color: isDark
+                ? Colors.white.withOpacity(0.07)
+                : Colors.white.withOpacity(0.60),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: isDark ? Colors.white.withOpacity(0.13) : Colors.white.withOpacity(0.75),
+              color: isDark
+                  ? Colors.white.withOpacity(0.13)
+                  : Colors.white.withOpacity(0.75),
             ),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 24, offset: const Offset(0, 8)),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.07),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
             ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (org.isTeam) ...[
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    CompanyAvatar(
-                      initials: org.initials,
-                      logoUrl: org.logoUrl,
-                      size: 54,
-                    ),
-                    const SizedBox(width: 13),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const LText(
-                            'ENTREPRISE',
-                            style: TextStyle(
-                              color: _P.mint,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: .8,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          LText(
-                            org.orgName ?? 'Entreprise',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: isDark ? _P.onDark : _P.onLight,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          if (org.slogan?.trim().isNotEmpty == true)
-                            LText(
-                              org.slogan!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: isDark ? _P.onDarkSub : _P.onLightSub,
-                                fontSize: 11.5,
-                              ),
-                            ),
-                          LText(
-                            org.roleLabel,
-                            style: const TextStyle(
-                              color: _P.mint,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-              ] else ...[
-                const WorkspaceBadge(),
-                const SizedBox(height: 14),
-              ],
+              // L'identité du compte et de l'espace est déjà visible dans
+              // la barre supérieure : aucune répétition dans la carte d'accueil.
               ShaderMask(
                 shaderCallback: (r) => _P.primary.createShader(r),
                 child: LText(
                   org.roleHomeTitle,
                   style: const TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.w900,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
                     color: Colors.white,
                   ),
                 ),
@@ -451,7 +680,8 @@ class _GlassHeroCard extends StatelessWidget {
               LText(
                 org.roleHomeSubtitle,
                 style: TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
                   color: isDark ? _P.onDarkSub : _P.onLightSub,
                   height: 1.5,
                 ),
@@ -459,12 +689,26 @@ class _GlassHeroCard extends StatelessWidget {
               const SizedBox(height: 14),
               // Mini stat chips
               Wrap(
-                spacing: 8, runSpacing: 8,
-                children: const [
-                  _StatChip(emoji: '📍', label: 'Géolocalisation OSM'),
-                  _StatChip(emoji: '✨', label: 'Optimisation IA'),
-                  _StatChip(emoji: '📊', label: 'Reporting intégré'),
-                ],
+                spacing: 8,
+                runSpacing: 8,
+                children: org.isTeam
+                    ? [
+                        if (org.canManageTeam)
+                          const _StatChip(emoji: '👥', label: 'Équipe & accès'),
+                        const _StatChip(
+                          emoji: '🗓️',
+                          label: 'Planning partagé',
+                        ),
+                        const _StatChip(
+                          emoji: '📊',
+                          label: 'Performance terrain',
+                        ),
+                      ]
+                    : const [
+                        _StatChip(emoji: '📍', label: 'Géolocalisation OSM'),
+                        _StatChip(emoji: '✨', label: 'Optimisation IA'),
+                        _StatChip(emoji: '📊', label: 'Reporting intégré'),
+                      ],
               ),
             ],
           ),
@@ -493,7 +737,14 @@ class _StatChip extends StatelessWidget {
         children: [
           LText(emoji, style: const TextStyle(fontSize: 13)),
           const SizedBox(width: 5),
-          LText(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _P.indigo)),
+          LText(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _P.indigo,
+            ),
+          ),
         ],
       ),
     );
@@ -505,7 +756,11 @@ class _NavCard extends StatelessWidget {
   final _NavItem item;
   final bool isDark;
   final VoidCallback onTap;
-  const _NavCard({required this.item, required this.isDark, required this.onTap});
+  const _NavCard({
+    required this.item,
+    required this.isDark,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -518,20 +773,29 @@ class _NavCard extends StatelessWidget {
           child: Container(
             height: 68,
             decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.07) : Colors.white.withOpacity(0.65),
+              color: isDark
+                  ? Colors.white.withOpacity(0.07)
+                  : Colors.white.withOpacity(0.65),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isDark ? Colors.white.withOpacity(0.13) : Colors.white.withOpacity(0.80),
+                color: isDark
+                    ? Colors.white.withOpacity(0.13)
+                    : Colors.white.withOpacity(0.80),
               ),
               boxShadow: [
-                BoxShadow(color: item.gradient.first.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 6)),
+                BoxShadow(
+                  color: item.gradient.first.withOpacity(0.12),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
               ],
             ),
             child: Row(
               children: [
                 // Icône gradient pill
                 Container(
-                  width: 68, height: 68,
+                  width: 68,
+                  height: 68,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: item.gradient,

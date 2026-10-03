@@ -1,0 +1,14 @@
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const {salesPayload, assertSalesRevision, needsSalesCorrection} = require('../lib/sales_logic');
+const now = Date.UTC(2026,9,2,12);
+const valid = {title:'Contrat énergie',stage:'qualified',interest:'hot',amountCents:1999,nextAction:'followup',nextActionAtMs:now+86400000};
+test('keeps integer cents, not floating euros',()=>assert.equal(salesPayload(valid,now).amountCents,1999));
+test('missing amount is distinct from zero',()=>{assert.equal(salesPayload({...valid,amountCents:null},now).amountCents,null);assert.equal(salesPayload({...valid,amountCents:0},now).amountCents,0);});
+test('rejects unknown stage and temperature',()=>{assert.throws(()=>salesPayload({...valid,stage:'present'},now));assert.throws(()=>salesPayload({...valid,interest:'urgent'},now));});
+test('signed contract requires offer and past signature',()=>{assert.throws(()=>salesPayload({...valid,stage:'won'},now));assert.throws(()=>salesPayload({...valid,stage:'won',offer:'Offre',signedAtMs:now+1},now));const won=salesPayload({...valid,stage:'won',offer:'Offre',signedAtMs:now-1},now);assert.equal(won.nextAction,'');assert.equal(won.nextActionAtMs,null);});
+test('lost deal requires loss reason',()=>assert.throws(()=>salesPayload({...valid,stage:'lost'},now)));
+test('action and deadline are paired',()=>{assert.throws(()=>salesPayload({...valid,nextActionAtMs:null},now));assert.throws(()=>salesPayload({...valid,nextAction:''},now));});
+test('negative, fractional and excessive amounts rejected',()=>{for(const amountCents of [-1,10.5,1e15,'100'])assert.throws(()=>salesPayload({...valid,amountCents},now));});
+test('new and updated revisions reject stale writes',()=>{assertSalesRevision(null,0);assertSalesRevision(4,4);assert.throws(()=>assertSalesRevision(4,3));assert.throws(()=>assertSalesRevision(null,1));});
+test('changing terminal outcome or amount requires correction',()=>{const won=salesPayload({...valid,stage:'won',offer:'Offre',signedAtMs:now-1},now);assert.equal(needsSalesCorrection(won,won),false);assert.equal(needsSalesCorrection(won,{...won,amountCents:2000}),true);assert.equal(needsSalesCorrection(won,{...won,stage:'qualified'}),true);});

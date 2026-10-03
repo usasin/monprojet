@@ -94,10 +94,7 @@ class WorkspaceScope {
       }
       orgName = (orgData['name'] ?? orgName ?? 'Entreprise').toString();
       role = (memberData['role'] ?? role ?? 'REP').toString();
-      final normalizedRole = role.toUpperCase();
-      routeAutonomy = normalizedRole == 'OWNER' || normalizedRole == 'MANAGER'
-          ? true
-          : memberData['routeAutonomy'] == true;
+      routeAutonomy = true;
     }
 
     final result = WorkspaceScope._(

@@ -1,0 +1,13 @@
+Prospecto 1.3.14+44 — HOTFIX RC4
+
+Corrige deux problèmes constatés sur appareil réel :
+1. Overflow du panneau « Changer d’espace » sur écran court / Fold.
+2. Accès développeur Entreprise : le compte avec la custom claim prospectoDeveloper peut générer un espace de test Équipe (10 places) sans paiement Stripe.
+
+Le compte développeur est maintenant indiqué dans l’écran Espace entreprise.
+
+Installation : extraire ce ZIP à la racine de C:\dev\prospecto en remplaçant les fichiers.
+Puis lancer :
+  .\verifier_prospecto.ps1
+Puis, seulement si tout est OK :
+  flutter run

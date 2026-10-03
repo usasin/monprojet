@@ -1,3 +1,4 @@
+import {salesPayload, assertSalesRevision, needsSalesCorrection} from "./sales_logic";
 import {createHash, randomBytes} from "node:crypto";
 import {getApps, initializeApp} from "firebase-admin/app";
 import {getAuth} from "firebase-admin/auth";
@@ -55,22 +56,16 @@ function appPath(appId: string): DocumentReference {
 }
 
 function inviteCode(): string {
-  return randomBytes(5).toString("hex").toUpperCase();
+  return randomBytes(16).toString("hex").toUpperCase();
 }
 
 async function memberRole(appId: string, orgId: string, uid: string): Promise<string | null> {
-  const snap = await appPath(appId).collection("orgs").doc(orgId)
-    .collection("members").doc(uid).get();
+  const orgRef = appPath(appId).collection("orgs").doc(orgId);
+  const org = await orgRef.get();
+  if (!org.exists || !subscriptionIsActive(org.data() ?? {})) return null;
+  const snap = await orgRef.collection("members").doc(uid).get();
   if (!snap.exists || snap.get("status") !== "active") return null;
   return String(snap.get("role") ?? "REP").toUpperCase();
-}
-
-async function requireTeamManager(appId: string, orgId: string, uid: string): Promise<"OWNER" | "MANAGER"> {
-  const role = await memberRole(appId, orgId, uid);
-  if (role !== "OWNER" && role !== "MANAGER") {
-    throw new HttpsError("permission-denied", "Seul un administrateur principal ou un responsable commercial peut effectuer cette action.");
-  }
-  return role;
 }
 
 function requireDateId(value: unknown): string {
@@ -95,6 +90,7 @@ function stringArray(value: unknown, name: string, maxItems = 100): string[] {
 async function notifyUser(uid: string, title: string, body: string, data: Record<string, string> = {}): Promise<void> {
   try {
     const user = await db.collection("users").doc(uid).get();
+    if (user.get("notificationsEnabled") === false) return;
     const tokensMap = user.get("fcmTokens") as Record<string, unknown> | undefined;
     const tokens = Object.keys(tokensMap ?? {}).slice(0, 100);
     if (tokens.length === 0) return;
@@ -493,11 +489,15 @@ export const createOrgInvite = onCall({region}, async (request) => {
     throw new HttpsError("invalid-argument", "Rôle non autorisé.");
   }
   const currentRole = await memberRole(appId, orgId, uid);
-  if (!currentRole || !new Set(["OWNER", "MANAGER"]).has(currentRole)) {
-    throw new HttpsError("permission-denied", "Seul un responsable peut inviter un membre.");
+  if (currentRole !== "OWNER") {
+    throw new HttpsError("permission-denied", "Seul l’administrateur principal peut inviter un membre.");
   }
-  if (currentRole === "MANAGER" && role !== "REP") {
-    throw new HttpsError("permission-denied", "Un responsable commercial peut uniquement inviter des commerciaux.");
+  const firstName = requireText(request.data?.firstName, "Prénom", 80);
+  const lastName = requireText(request.data?.lastName, "Nom", 80);
+  const email = optionalEmail(requireText(request.data?.email, "E-mail", 254));
+  const managerUid = role === "REP" ? String(request.data?.managerUid ?? "").trim() : "";
+  if (managerUid && await memberRole(appId, orgId, managerUid) !== "MANAGER") {
+    throw new HttpsError("invalid-argument", "Responsable commercial inactif ou invalide.");
   }
   const root = appPath(appId);
   const orgRef = root.collection("orgs").doc(orgId);
@@ -512,14 +512,12 @@ export const createOrgInvite = onCall({region}, async (request) => {
   }
 
   const code = inviteCode();
-  const normalizedEmail = optionalEmail(request.data?.email);
-  const email = normalizedEmail || null;
   const expiresAt = Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const inviteRef = orgRef.collection("invites").doc(code);
   const lookupRef = root.collection("inviteCodes").doc(code);
   const batch = db.batch();
   batch.create(inviteRef, {
-    code, role, email, active: true, createdBy: uid,
+    code, role, email, firstName, lastName, managerUid, active: true, createdBy: uid,
     createdAt: FieldValue.serverTimestamp(), expiresAt,
   });
   batch.create(lookupRef, {orgId, active: true, expiresAt});
@@ -532,6 +530,50 @@ export const createOrgInvite = onCall({region}, async (request) => {
   return {code, expiresAt: expiresAt.toDate().toISOString()};
 });
 
+// The invitation is a high-entropy bearer secret. The preview exposes only the
+// invitation identity, never membership data or administrative information.
+export const previewOrgInvite = onCall({region}, async (request) => {
+  const appId = requireText(request.data?.appId, "appId", 40);
+  const code = requireText(request.data?.code, "Code", 80).toUpperCase();
+  const root = appPath(appId);
+  const lookup = await root.collection("inviteCodes").doc(code).get();
+  if (!lookup.exists || lookup.get("active") !== true ||
+      !(lookup.get("expiresAt") instanceof Timestamp) || lookup.get("expiresAt").toMillis() <= Date.now()) {
+    throw new HttpsError("not-found", "Invitation invalide, déjà utilisée ou expirée.");
+  }
+  const orgRef = root.collection("orgs").doc(String(lookup.get("orgId")));
+  const [org, invite] = await Promise.all([orgRef.get(), orgRef.collection("invites").doc(code).get()]);
+  if (!org.exists || !subscriptionIsActive(org.data() ?? {}) || invite.get("active") !== true || !invite.get("email")) {
+    throw new HttpsError("failed-precondition", "Demandez une nouvelle invitation nominative à votre administrateur.");
+  }
+  return {orgName: org.get("name"), email: invite.get("email"),
+    firstName: invite.get("firstName") ?? "", lastName: invite.get("lastName") ?? "", role: invite.get("role")};
+});
+
+export const assignMemberManager = onCall({region}, async (request) => {
+  const uid = requireUser(request);
+  const appId = requireText(request.data?.appId, "appId", 40);
+  const orgId = requireText(request.data?.orgId, "Organisation", 100);
+  const memberUid = requireText(request.data?.memberUid, "Commercial", 128);
+  const managerUid = String(request.data?.managerUid ?? "").trim();
+  if (await memberRole(appId, orgId, uid) !== "OWNER") throw new HttpsError("permission-denied", "Action réservée à l’administrateur principal.");
+  if (await memberRole(appId, orgId, memberUid) !== "REP") throw new HttpsError("invalid-argument", "Commercial inactif ou invalide.");
+  if (managerUid && await memberRole(appId, orgId, managerUid) !== "MANAGER") throw new HttpsError("invalid-argument", "Responsable inactif ou invalide.");
+  await appPath(appId).collection("orgs").doc(orgId).collection("members").doc(memberUid)
+    .update({managerUid, updatedAt: FieldValue.serverTimestamp()});
+  return {updated: true};
+});
+
+async function requireManagedMember(appId: string, orgId: string, uid: string, memberUid: string, allowSelf = false): Promise<void> {
+  const role = await memberRole(appId, orgId, uid);
+  if (allowSelf && uid === memberUid && role) return;
+  if (role === "OWNER") return;
+  const target = await appPath(appId).collection("orgs").doc(orgId).collection("members").doc(memberUid).get();
+  if (role !== "MANAGER" || target.get("role") !== "REP" || target.get("managerUid") !== uid) {
+    throw new HttpsError("permission-denied", "Ce commercial ne fait pas partie de votre équipe.");
+  }
+}
+
 export const acceptOrgInvite = onCall({region}, async (request) => {
   const uid = requireUser(request);
   const appId = requireText(request.data?.appId, "appId", 40);
@@ -541,6 +583,9 @@ export const acceptOrgInvite = onCall({region}, async (request) => {
   const userRef = db.collection("users").doc(uid);
   const email = typeof request.auth?.token.email === "string"
     ? request.auth.token.email.toLowerCase() : "";
+  if (!email || request.auth?.token.email_verified !== true) {
+    throw new HttpsError("failed-precondition", "Vérifiez votre adresse e-mail avant d’activer l’invitation.");
+  }
   let response = {orgId: "", orgName: "", role: "REP"};
 
   await db.runTransaction(async (tx) => {
@@ -571,8 +616,9 @@ export const acceptOrgInvite = onCall({region}, async (request) => {
       throw new HttpsError("failed-precondition", "Invitation ou espace entreprise indisponible.");
     }
     const restrictedEmail = String(invite.get("email") ?? "").toLowerCase();
-    if (restrictedEmail && restrictedEmail !== email) {
-      throw new HttpsError("permission-denied", "Cette invitation est liée à une autre adresse e-mail.");
+    if (!restrictedEmail) throw new HttpsError("failed-precondition", "Demandez une nouvelle invitation nominative à votre administrateur.");
+    if (restrictedEmail !== email) {
+      throw new HttpsError("permission-denied", `Cette invitation est réservée à ${restrictedEmail}`);
     }
     const maxSeats = Number(org.get("maxSeats") ?? 5);
     const membersQuery = orgRef.collection("members").where("status", "==", "active");
@@ -580,13 +626,21 @@ export const acceptOrgInvite = onCall({region}, async (request) => {
     if (members.size >= maxSeats && !members.docs.some((doc) => doc.id === uid)) {
       throw new HttpsError("resource-exhausted", "Organisation complète.");
     }
+    if (members.docs.some((doc) => doc.id === uid)) {
+      throw new HttpsError("already-exists", "Votre compte est déjà membre. Connectez-vous sans code.");
+    }
     const role = String(invite.get("role") ?? "REP").toUpperCase();
+    if (!["REP", "MANAGER"].includes(role)) throw new HttpsError("failed-precondition", "Rôle d’invitation invalide.");
     tx.set(orgRef.collection("members").doc(uid), {
       uid,
       email,
       role,
       status: "active",
-      routeAutonomy: role === "MANAGER",
+      routeAutonomy: true,
+      firstName: invite.get("firstName") ?? "",
+      lastName: invite.get("lastName") ?? "",
+      displayName: `${invite.get("firstName") ?? ""} ${invite.get("lastName") ?? ""}`.trim(),
+      managerUid: role === "REP" ? invite.get("managerUid") ?? "" : "",
       joinedAt: FieldValue.serverTimestamp(),
       lastActivityAt: FieldValue.serverTimestamp(),
     }, {merge: true});
@@ -624,7 +678,7 @@ export const removeOrgMember = onCall({region}, async (request) => {
   const memberUid = requireText(request.data?.memberUid, "Membre", 128);
   if (memberUid === uid) throw new HttpsError("failed-precondition", "Vous ne pouvez pas vous retirer ici.");
   const role = await memberRole(appId, orgId, uid);
-  if (role !== "OWNER" && role !== "MANAGER") {
+  if (role !== "OWNER") {
     throw new HttpsError("permission-denied", "Droits insuffisants.");
   }
   const orgRef = appPath(appId).collection("orgs").doc(orgId);
@@ -635,20 +689,29 @@ export const removeOrgMember = onCall({region}, async (request) => {
   if (targetRole === "OWNER") {
     throw new HttpsError("failed-precondition", "Le propriétaire ne peut pas être supprimé.");
   }
-  if (role === "MANAGER" && targetRole !== "REP") {
-    throw new HttpsError("permission-denied", "Un responsable commercial peut uniquement retirer un commercial.");
-  }
+  const pending = await orgRef.collection("invites").where("email", "==", String(target.get("email") ?? "")).where("active", "==", true).get();
   const userRef = db.collection("users").doc(memberUid);
   const user = await userRef.get();
   const batch = db.batch();
+  for (const invitation of pending.docs) {
+    batch.update(invitation.ref, {active: false, revokedBy: uid, revokedAt: FieldValue.serverTimestamp()});
+    batch.set(appPath(appId).collection("inviteCodes").doc(invitation.id), {active: false, revokedBy: uid, revokedAt: FieldValue.serverTimestamp()}, {merge: true});
+  }
   batch.update(targetRef, {status: "removed", removedAt: FieldValue.serverTimestamp(), removedBy: uid});
   const userUpdate: Record<string, unknown> = {
     orgIds: FieldValue.arrayRemove(orgId),
-    teamOrgId: FieldValue.delete(),
-    teamOrgName: FieldValue.delete(),
-    teamRole: FieldValue.delete(),
     updatedAt: FieldValue.serverTimestamp(),
   };
+  if (existingTeamId(user.data() ?? {}) === orgId) {
+    userUpdate.teamOrgId = FieldValue.delete();
+    userUpdate.teamOrgName = FieldValue.delete();
+    userUpdate.teamRole = FieldValue.delete();
+  }
+  if (String(user.get("orgId") ?? "") === orgId) {
+    userUpdate.orgId = FieldValue.delete();
+    userUpdate.orgName = FieldValue.delete();
+    userUpdate.role = FieldValue.delete();
+  }
   if (String(user.get("currentOrgId") ?? "") === orgId) {
     userUpdate.currentOrgId = FieldValue.delete();
     userUpdate.currentOrgName = FieldValue.delete();
@@ -675,13 +738,15 @@ export const revokeOrgInvite = onCall({region}, async (request) => {
   const orgId = requireText(request.data?.orgId, "Organisation", 100);
   const code = requireText(request.data?.code, "Code", 80).toUpperCase();
   const role = await memberRole(appId, orgId, uid);
-  if (role !== "OWNER" && role !== "MANAGER") {
+  if (role !== "OWNER") {
     throw new HttpsError("permission-denied", "Droits insuffisants.");
   }
   const root = appPath(appId);
   const orgRef = root.collection("orgs").doc(orgId);
   const inviteRef = orgRef.collection("invites").doc(code);
   const lookupRef = root.collection("inviteCodes").doc(code);
+  const [invitation, lookup] = await Promise.all([inviteRef.get(), lookupRef.get()]);
+  if (!invitation.exists || !lookup.exists || lookup.get("orgId") !== orgId) throw new HttpsError("not-found", "Invitation introuvable.");
   const batch = db.batch();
   batch.set(inviteRef, {
     active: false,
@@ -756,43 +821,9 @@ export const setMemberRouteAutonomy = onCall({region}, async (request) => {
   const uid = requireUser(request);
   const appId = requireText(request.data?.appId, "appId", 40);
   const orgId = requireText(request.data?.orgId, "Organisation", 100);
-  const memberUid = requireText(request.data?.memberUid, "Membre", 128);
-  const enabled = request.data?.enabled === true;
-  await requireTeamManager(appId, orgId, uid);
-
-  const orgRef = appPath(appId).collection("orgs").doc(orgId);
-  const memberRef = orgRef.collection("members").doc(memberUid);
-  const target = await memberRef.get();
-  if (!target.exists || target.get("status") !== "active") {
-    throw new HttpsError("not-found", "Commercial introuvable ou inactif.");
-  }
-  const targetRole = String(target.get("role") ?? "REP").toUpperCase();
-  if (targetRole !== "REP") {
-    throw new HttpsError("failed-precondition", "L’autonomie se règle uniquement pour un commercial.");
-  }
-  const email = String(target.get("email") ?? "Le commercial");
-  const batch = db.batch();
-  batch.update(memberRef, {
-    routeAutonomy: enabled,
-    autonomyUpdatedBy: uid,
-    autonomyUpdatedAt: FieldValue.serverTimestamp(),
-  });
-  batch.create(orgRef.collection("activity").doc(), activityData(
-    request,
-    enabled ? "route_autonomy_enabled" : "route_autonomy_disabled",
-    `${email} : autonomie des tournées ${enabled ? "activée" : "désactivée"}.`,
-    memberUid,
-  ));
-  await batch.commit();
-  await notifyUser(
-    memberUid,
-    "Prospecto Entreprise",
-    enabled
-      ? "Votre responsable a activé vos tournées en autonomie."
-      : "Votre responsable a désactivé la création de tournées en autonomie.",
-    {type: "route_autonomy", orgId, enabled: String(enabled)},
-  );
-  return {updated: true, routeAutonomy: enabled};
+  if (await memberRole(appId, orgId, uid) !== "OWNER") throw new HttpsError("permission-denied", "Action réservée à l’administrateur principal.");
+  if (request.data?.enabled !== true) throw new HttpsError("failed-precondition", "Chaque commercial peut créer ses propres tournées.");
+  return {updated: true, routeAutonomy: true};
 });
 
 export const assignMemberPlan = onCall({region}, async (request) => {
@@ -804,7 +835,7 @@ export const assignMemberPlan = onCall({region}, async (request) => {
   const prospectIds = stringArray(request.data?.prospectIds, "Prospects", 100);
   const notes = optionalText(request.data?.notes, 1000);
   const replaceExisting = request.data?.replaceExisting === true;
-  await requireTeamManager(appId, orgId, uid);
+  await requireManagedMember(appId, orgId, uid, memberUid, false);
 
   const orgRef = appPath(appId).collection("orgs").doc(orgId);
   const memberRef = orgRef.collection("members").doc(memberUid);
@@ -845,6 +876,7 @@ export const assignMemberPlan = onCall({region}, async (request) => {
     orgId,
     ownerUid: memberUid,
     assignedBy: uid,
+    assignedByName: String(request.auth?.token.name ?? request.auth?.token.email ?? "Responsable"),
     assignmentSource: "manager",
     assignmentLocked: true,
     assignedAt: FieldValue.serverTimestamp(),
@@ -888,7 +920,7 @@ export const upsertMemberAppointment = onCall({region}, async (request) => {
   const address = optionalText(request.data?.address, 500);
   const notes = optionalText(request.data?.notes, 1500);
   const forceConflict = request.data?.forceConflict === true;
-  await requireTeamManager(appId, orgId, uid);
+  await requireManagedMember(appId, orgId, uid, memberUid, true);
 
   const orgRef = appPath(appId).collection("orgs").doc(orgId);
   const memberRef = orgRef.collection("members").doc(memberUid);
@@ -972,7 +1004,7 @@ export const cancelMemberAppointment = onCall({region}, async (request) => {
   const orgId = requireText(request.data?.orgId, "Organisation", 100);
   const memberUid = requireText(request.data?.memberUid, "Commercial", 128);
   const appointmentId = requireText(request.data?.appointmentId, "Rendez-vous", 128);
-  await requireTeamManager(appId, orgId, uid);
+  await requireManagedMember(appId, orgId, uid, memberUid, true);
   const orgRef = appPath(appId).collection("orgs").doc(orgId);
   const memberRef = orgRef.collection("members").doc(memberUid);
   const ref = orgRef.collection("memberData").doc(memberUid).collection("appointments").doc(appointmentId);
@@ -1320,6 +1352,17 @@ export const sendDueFollowUpReminders = onSchedule({
     const uid = reminder.ref.parent.parent?.id;
     if (!uid) continue;
     const user = await db.collection("users").doc(uid).get();
+    if (user.get("notificationsEnabled") === false) {
+      await reminder.ref.update({status: "muted", processedAt: FieldValue.serverTimestamp()});
+      continue;
+    }
+    // A revoked employee must not receive reminders containing enterprise data.
+    const segments = reminder.ref.path.split("/");
+    if (segments[0] === "apps" && segments[2] === "orgs" &&
+        !await memberRole(segments[1], segments[3], uid)) {
+      await reminder.ref.update({status: "access-revoked", processedAt: FieldValue.serverTimestamp()});
+      continue;
+    }
     const tokensMap = user.get("fcmTokens") as Record<string, unknown> | undefined;
     const tokens = Object.keys(tokensMap ?? {}).slice(0, 100);
     if (tokens.length === 0) {
@@ -1359,4 +1402,150 @@ export const sendDueFollowUpReminders = onSchedule({
       await user.ref.update(removals);
     }
   }
+});
+
+// Cycle de vente séparé des rapports de visite ; écritures exclusivement serveur.
+export const saveSalesOpportunity = onCall({region}, async (request) => {
+  const uid = requireUser(request);
+  const appId = requireText(request.data?.appId, "Application", 40);
+  const personal = request.data?.workspace === "personal";
+  if (request.data?.workspace != null && !["personal", "team"].includes(request.data.workspace)) throw new HttpsError("invalid-argument", "Espace invalide.");
+  const orgId = personal ? "" : requireText(request.data?.orgId, "Organisation", 100);
+  if (personal && request.data?.orgId) throw new HttpsError("invalid-argument", "Une vente Solo ne peut pas cibler une entreprise.");
+  const prospectId = requireText(request.data?.prospectId, "Prospect", 200);
+  const opportunityId = requireText(request.data?.opportunityId, "Opportunité", 100);
+  if ([appId, orgId, prospectId, opportunityId].some((v) => v.includes("/"))) throw new HttpsError("invalid-argument", "Identifiant invalide");
+  let values: ReturnType<typeof salesPayload>;
+  try { values = salesPayload(request.data, Date.now()); }
+  catch (e) { throw new HttpsError("invalid-argument", (e as Error).message); }
+  const org = personal ? db.collection("users").doc(uid) : appPath(appId).collection("orgs").doc(orgId);
+  const ref = (personal ? org : org.collection("memberData").doc(uid)).collection("opportunities").doc(opportunityId);
+  return db.runTransaction(async (tx) => {
+    const [orgSnap, member, prospect, existing] = await Promise.all([
+      tx.get(org), personal ? Promise.resolve(null) : tx.get(org.collection("members").doc(uid)),
+      tx.get(org.collection("prospects").doc(prospectId)), tx.get(ref),
+    ]);
+    if (!personal && (!orgSnap.exists || !subscriptionIsActive(orgSnap.data() ?? {}) || member?.get("status") !== "active" || member?.get("role") !== "REP")) throw new HttpsError("permission-denied", "Réservé à un commercial actif.");
+    if (existing.get("deletedAt")) throw new HttpsError("failed-precondition", "Cette opportunité a été supprimée par l’administrateur.");
+    if (!prospect.exists) throw new HttpsError("not-found", "Le prospect n’existe plus.");
+    if (existing.exists && existing.get("prospectId") !== prospectId) throw new HttpsError("invalid-argument", "Le prospect d’une opportunité ne peut pas changer.");
+    const mutationHash = createHash('sha256').update(JSON.stringify(values)).digest('hex');
+    if (existing.exists && existing.get('revision') === Number(request.data?.expectedRevision) + 1 && existing.get('lastMutationHash') === mutationHash) return {opportunityId, revision: existing.get('revision')};
+    try { assertSalesRevision(existing.exists ? Number(existing.get("revision")) : null, request.data?.expectedRevision); }
+    catch { throw new HttpsError("aborted", "L’opportunité a changé. Actualisez avant de réessayer ; votre brouillon est conservé."); }
+    const previous = existing.data() ?? {};
+    if (existing.exists && needsSalesCorrection({...previous, signedAtMs: previous.signedAt?.toMillis?.() ?? null}, values) && !values.correctionReason) throw new HttpsError("failed-precondition", "Précisez le motif de correction d’une affaire clôturée.");
+    const revision = existing.exists ? Number(existing.get("revision")) + 1 : 1;
+    const terminal = ["won", "lost"].includes(values.stage);
+    const closedAt = values.stage === "won" ? Timestamp.fromMillis(values.signedAtMs!)
+      : values.stage === "lost" ? (previous.stage === "lost" ? previous.closedAt : Timestamp.now()) : null;
+    const next = {
+      ...values, signedAtMs: undefined, nextActionAtMs: undefined, correctionReason: undefined,
+      lastMutationHash: mutationHash, ownerUid: uid, orgId, prospectId, prospectName: prospect.get("name") ?? "Prospect",
+      revision, signedAt: values.signedAtMs === null ? null : Timestamp.fromMillis(values.signedAtMs),
+      nextActionAt: values.nextActionAtMs === null ? null : Timestamp.fromMillis(values.nextActionAtMs),
+      closedAt: terminal ? closedAt : null,
+      createdAt: previous.createdAt ?? FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    };
+    delete next.signedAtMs; delete next.nextActionAtMs; delete next.correctionReason;
+    tx.set(ref, next);
+    const beforeAudit = {...previous}; delete beforeAudit.lastMutationHash;
+    const afterAudit = {...next}; delete (afterAudit as Partial<typeof next>).lastMutationHash;
+    tx.create(ref.collection("history").doc(String(revision)), {
+      revision, actorUid: uid, at: FieldValue.serverTimestamp(),
+      before: existing.exists ? beforeAudit : null,
+      after: afterAudit,
+      correctionReason: values.correctionReason,
+    });
+    return {opportunityId, revision};
+  });
+});
+
+// Remplacement atomique de l'équipe d'un responsable : aucun transfert partiel.
+export const assignManagerTeam = onCall({region}, async (request) => {
+  const uid = requireUser(request);
+  const appId = requireText(request.data?.appId, "Application", 40);
+  const orgId = requireText(request.data?.orgId, "Organisation", 100);
+  const managerUid = requireText(request.data?.managerUid, "Responsable", 128);
+  if (appId.includes("/") || orgId.includes("/") || managerUid.includes("/")) throw new HttpsError("invalid-argument", "Identifiant invalide.");
+  const raw = request.data?.memberUids;
+  if (!Array.isArray(raw) || raw.length > 100 || raw.some((v: unknown) => typeof v !== "string" || !v || (v as string).includes("/") || (v as string).length > 128)) throw new HttpsError("invalid-argument", "Sélection de 100 commerciaux maximum.");
+  const selected = [...new Set<string>(raw)];
+  const org = appPath(appId).collection("orgs").doc(orgId);
+  const members = org.collection("members");
+  return db.runTransaction(async (tx) => {
+    const [organization, actor, manager, assigned] = await Promise.all([
+      tx.get(org), tx.get(members.doc(uid)), tx.get(members.doc(managerUid)),
+      tx.get(members.where("managerUid", "==", managerUid).where("role", "==", "REP")),
+    ]);
+    if (!organization.exists || !subscriptionIsActive(organization.data() ?? {}) || actor.get("status") !== "active" || actor.get("role") !== "OWNER") throw new HttpsError("permission-denied", "Réservé à l’administrateur principal.");
+    if (manager.get("status") !== "active" || manager.get("role") !== "MANAGER") throw new HttpsError("failed-precondition", "Responsable inactif.");
+    if (assigned.size > 200) throw new HttpsError("resource-exhausted", "Équipe trop grande pour cette opération ; contactez le support.");
+    const chosen = await Promise.all(selected.map((id) => tx.get(members.doc(id))));
+    if (chosen.some((d) => !d.exists || d.get("role") !== "REP" || d.get("status") !== "active")) throw new HttpsError("failed-precondition", "Un commercial de la sélection n’est plus actif. Actualisez.");
+    for (const doc of assigned.docs) if (!selected.includes(doc.id)) tx.update(doc.ref, {managerUid: "", updatedAt: FieldValue.serverTimestamp()});
+    for (const doc of chosen) if (doc.get("managerUid") !== managerUid) tx.update(doc.ref, {managerUid, updatedAt: FieldValue.serverTimestamp()});
+    tx.create(org.collection("activity").doc(), {action: "team_assigned", message: `Équipe mise à jour : ${selected.length} commerciaux.`, actorUid: uid, targetUid: managerUid, createdAt: FieldValue.serverTimestamp()});
+    return {updated: true, count: selected.length};
+  });
+});
+
+// Company-owned presentation settings, shared by every administrative/field view.
+export const updateEnterpriseDisplaySettings = onCall({region}, async (request) => {
+  const uid = requireUser(request);
+  const appId = requireText(request.data?.appId, "Application", 40);
+  const orgId = requireText(request.data?.orgId, "Organisation", 100);
+  if (orgId.includes("/")) throw new HttpsError("invalid-argument", "Identifiant invalide.");
+  const showContracts = request.data?.showContracts;
+  const showRevenue = request.data?.showRevenue;
+  if (typeof showContracts !== "boolean" || typeof showRevenue !== "boolean" || (!showContracts && !showRevenue)) {
+    throw new HttpsError("invalid-argument", "Choisissez au moins un indicateur commercial.");
+  }
+  const org = appPath(appId).collection("orgs").doc(orgId);
+  await db.runTransaction(async (tx) => {
+    const [organization, actor] = await Promise.all([tx.get(org), tx.get(org.collection("members").doc(uid))]);
+    if (!organization.exists || !subscriptionIsActive(organization.data() ?? {}) || actor.get("role") !== "OWNER" || actor.get("status") !== "active") {
+      throw new HttpsError("permission-denied", "Réservé à l’administrateur principal.");
+    }
+    tx.update(org, {displaySettings: {showContracts, showRevenue}, updatedAt: FieldValue.serverTimestamp(), updatedBy: uid});
+    tx.create(org.collection("activity").doc(), activityData(request, "display_settings_updated", "Les indicateurs commerciaux ont été configurés."));
+  });
+  return {updated: true};
+});
+
+// Delete a directory entry or remove an opportunity from live results.
+// Historical route reports and the immutable opportunity audit are preserved.
+export const deleteEnterpriseRecord = onCall({region}, async (request) => {
+  const uid = requireUser(request);
+  const appId = requireText(request.data?.appId, "Application", 40);
+  const orgId = requireText(request.data?.orgId, "Organisation", 100);
+  const id = requireText(request.data?.id, "Fiche", 200);
+  const kind = request.data?.kind;
+  const ownerUid = kind === "opportunity" ? requireText(request.data?.ownerUid, "Commercial", 128) : "";
+  if (!["prospect", "opportunity"].includes(kind) || [orgId, id, ownerUid].some(v => v.includes("/"))) {
+    throw new HttpsError("invalid-argument", "Fiche invalide.");
+  }
+  const org = appPath(appId).collection("orgs").doc(orgId);
+  const ref = kind === "prospect" ? org.collection("prospects").doc(id)
+    : org.collection("memberData").doc(ownerUid).collection("opportunities").doc(id);
+  return db.runTransaction(async (tx) => {
+    const [organization, actor, target] = await Promise.all([tx.get(org), tx.get(org.collection("members").doc(uid)), tx.get(ref)]);
+    if (!organization.exists || !subscriptionIsActive(organization.data() ?? {}) || actor.get("role") !== "OWNER" || actor.get("status") !== "active") {
+      throw new HttpsError("permission-denied", "Réservé à l’administrateur principal.");
+    }
+    if (!target.exists) throw new HttpsError("not-found", "Cette fiche n’existe plus.");
+    if (target.get("deletedAt")) return {deleted: true};
+    const deletedAt = FieldValue.serverTimestamp();
+    if (kind === "prospect") {
+      tx.create(org.collection("deletedRecords").doc(), {kind, originalPath: ref.path, data: target.data(), deletedBy: uid, deletedAt});
+      tx.delete(ref);
+    } else {
+      const revision = Number(target.get("revision") ?? 0) + 1;
+      const after = {...target.data(), deletedAt, deletedBy: uid, revision, updatedAt: deletedAt};
+      tx.update(ref, {deletedAt, deletedBy: uid, revision, updatedAt: deletedAt});
+      tx.create(ref.collection("history").doc(String(revision)), {revision, actorUid: uid, at: deletedAt, before: target.data(), after, correctionReason: "Suppression administrative", action: "deleted"});
+    }
+    tx.create(org.collection("activity").doc(), activityData(request, `${kind}_deleted`, kind === "prospect" ? "Une fiche prospect a été supprimée du répertoire." : "Une opportunité a été retirée des résultats.", ownerUid || undefined));
+    return {deleted: true};
+  });
 });

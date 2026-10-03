@@ -110,18 +110,33 @@ class _SplashScreenState extends State<SplashScreen>
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 350),
                         child: _preparing
-                            ? const Column(
-                                key: ValueKey('preparing'),
+                            ? Column(
+                                key: const ValueKey('preparing'),
                                 children: [
-                                  LText(
+                                  const LText(
                                     'Préparation de votre espace…',
                                     style: TextStyle(
                                       color: ProspectoColors.textSecondary,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                  SizedBox(height: 14),
-                                  SizedBox(
+                                  if (FirebaseAuth.instance.currentUser != null) ...[
+                                    const SizedBox(height: 6),
+                                    LText(
+                                      FirebaseAuth.instance.currentUser!.isAnonymous
+                                          ? 'Compte : session invitée'
+                                          : 'Compte : ${FirebaseAuth.instance.currentUser!.email ?? FirebaseAuth.instance.currentUser!.displayName ?? 'Prospecto'}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: ProspectoColors.blue,
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 14),
+                                  const SizedBox(
                                     width: 28,
                                     height: 28,
                                     child: CircularProgressIndicator(

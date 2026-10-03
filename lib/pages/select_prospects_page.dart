@@ -156,13 +156,28 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
 
   // ── Section expansion (accordéon)
   bool _searchExpanded = true;
+  bool _seedApplied = false, _routeArgsRead = false;
+  List<String> _seedIds = [];
 
   @override
   void initState() {
     super.initState();
     _refreshEntitlements();
-    _loadForDate();
+    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _loadForDate(); });
     _fabAnim.forward();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_routeArgsRead) return;
+    _routeArgsRead = true;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map) {
+      _seedIds = List<String>.from(args['seedIds'] ?? const []);
+      if (args['dateMs'] is int) _selectedDate = DateTime.fromMillisecondsSinceEpoch(args['dateMs'] as int);
+      if (_seedIds.isNotEmpty) _searchExpanded = false;
+    }
   }
 
   @override
@@ -241,7 +256,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
   // ════════════ Ads ════════════
 
   void _loadBannerAd() {
-    if (_isPremium || !AdConfig.canUseAds) return;
+    if (_isPremium) return;
     _isBannerLoaded = false;
     _bannerAd?.dispose();
     _bannerAd = null;
@@ -319,6 +334,16 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
     try {
       final data = await FirestoreService().loadPlanData(_selectedDate);
       final ids  = List<String>.from(data['prospectIds'] ?? []);
+      var seeded = false;
+      if (!_seedApplied && _seedIds.isNotEmpty) {
+        if ((data['assignedBy'] ?? '').toString().isNotEmpty) {
+          _showToast('Cette tournée est attribuée. Choisissez une autre date pour ajouter des prospects.');
+        } else {
+          for (final id in _seedIds) { if (!ids.contains(id)) { ids.add(id); seeded = true; } }
+          _seedApplied = true;
+        }
+      }
+
       _replanned = Map<String, dynamic>.from(
         (data['replanned'] as Map?) ?? const <String, dynamic>{},
       );
@@ -337,7 +362,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
       } else {
         _allOptions.clear(); _options.clear(); _loadedCount = 0;
       }
-      _dirty = false;
+      _dirty = seeded;
     } finally {
       if (mounted && token == _fetchToken) setState(() => _loading = false);
     }

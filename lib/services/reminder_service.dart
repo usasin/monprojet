@@ -44,6 +44,46 @@ class ReminderService {
     }, SetOptions(merge: true));
   }
 
+
+  /// Retire le token de ce téléphone du compte actuellement connecté.
+  /// À appeler avant FirebaseAuth.signOut() pour empêcher qu'un ancien compte
+  /// continue à recevoir des notifications après un changement d'identité.
+  Future<void> unregisterCurrentDevice() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    String? token;
+    try {
+      token = await FirebaseMessaging.instance.getToken();
+    } catch (_) {
+      return;
+    }
+    if (token == null || token.isEmpty) return;
+
+    final ref = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    try {
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final snapshot = await transaction.get(ref);
+        if (!snapshot.exists) return;
+        final raw = snapshot.data()?['fcmTokens'];
+        if (raw is! Map) return;
+        final tokens = Map<String, dynamic>.from(raw);
+        if (!tokens.containsKey(token)) return;
+        tokens.remove(token);
+        transaction.set(
+          ref,
+          {
+            'fcmTokens': tokens,
+            'lastDeviceSeenAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      });
+    } catch (_) {
+      // La déconnexion ne doit jamais être bloquée par une panne réseau FCM.
+    }
+  }
+
   Future<void> scheduleFollowUp({
     required Prospect prospect,
     required DateTime visitAt,

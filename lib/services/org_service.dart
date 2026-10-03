@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
-
 class ActivationPlan {
   final String code;
   final String label;
@@ -20,14 +19,11 @@ class OrgService {
   final String appId;
 
   OrgService(this.appId, {FirebaseFunctions? functions})
-      : functions =
-            functions ?? FirebaseFunctions.instanceFor(region: 'europe-west1');
+    : functions =
+          functions ?? FirebaseFunctions.instanceFor(region: 'europe-west1');
 
-  DocumentReference<Map<String, dynamic>> orgRef(String orgId) => db
-      .collection('apps')
-      .doc(appId)
-      .collection('orgs')
-      .doc(orgId);
+  DocumentReference<Map<String, dynamic>> orgRef(String orgId) =>
+      db.collection('apps').doc(appId).collection('orgs').doc(orgId);
 
   Future<ActivationPlan> precheckActivationCode(String rawCode) async {
     final code = rawCode.trim().toUpperCase();
@@ -55,10 +51,10 @@ class OrgService {
       final result = await functions
           .httpsCallable('createOrgWithActivation')
           .call({
-        'appId': appId,
-        'name': name.trim(),
-        'activationCode': activationCode.trim().toUpperCase(),
-      });
+            'appId': appId,
+            'name': name.trim(),
+            'activationCode': activationCode.trim().toUpperCase(),
+          });
       final data = Map<String, dynamic>.from(result.data as Map);
       return {
         'orgId': data['orgId'].toString(),
@@ -73,7 +69,10 @@ class OrgService {
   Future<String> createInvite({
     required String orgId,
     String role = 'REP',
-    String? email,
+    required String email,
+    required String firstName,
+    required String lastName,
+    String? managerUid,
     String? requesterUid,
     String? requesterEmail,
   }) async {
@@ -82,7 +81,10 @@ class OrgService {
         'appId': appId,
         'orgId': orgId,
         'role': role,
-        if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+        'email': email.trim(),
+        'firstName': firstName.trim(),
+        'lastName': lastName.trim(),
+        'managerUid': managerUid ?? '',
       });
       final data = Map<String, dynamic>.from(result.data as Map);
       return data['code'].toString();
@@ -121,16 +123,14 @@ class OrgService {
         .doc(appId)
         .collection('inviteResendRequests')
         .add({
-      'code': code.trim().toUpperCase(),
-      'createdAt': FieldValue.serverTimestamp(),
-      if (requesterUid != null) 'requesterUid': requesterUid,
-      if (requesterEmail != null) 'requesterEmail': requesterEmail,
-    });
+          'code': code.trim().toUpperCase(),
+          'createdAt': FieldValue.serverTimestamp(),
+          if (requesterUid != null) 'requesterUid': requesterUid,
+          if (requesterEmail != null) 'requesterEmail': requesterEmail,
+        });
   }
 
-  Future<Map<String, String>> acceptInvite({
-    required String code,
-  }) async {
+  Future<Map<String, String>> acceptInvite({required String code}) async {
     try {
       final result = await functions.httpsCallable('acceptOrgInvite').call({
         'appId': appId,
@@ -250,9 +250,45 @@ class OrgService {
           .limit(100)
           .snapshots();
 
+  Stream<QuerySnapshot<Map<String, dynamic>>> allMembers(
+    String orgId, {
+    String? role,
+    String? uid,
+  }) {
+    Query<Map<String, dynamic>> query = orgRef(orgId).collection('members');
+    if (role == 'MANAGER')
+      query = query
+          .where('managerUid', isEqualTo: uid)
+          .where('role', isEqualTo: 'REP');
+    if (role == 'REP')
+      query = query.where(FieldPath.documentId, isEqualTo: uid);
+    return query.snapshots();
+  }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> allMembers(String orgId) =>
-      orgRef(orgId).collection('members').snapshots();
+  Future<void> assignMemberManager({
+    required String orgId,
+    required String memberUid,
+    required String managerUid,
+  }) async {
+    await functions.httpsCallable('assignMemberManager').call({
+      'appId': appId,
+      'orgId': orgId,
+      'memberUid': memberUid,
+      'managerUid': managerUid,
+    });
+  }
+
+  Future<Map<String, dynamic>> previewInvite(String code) async {
+    try {
+      final result = await functions.httpsCallable('previewOrgInvite').call({
+        'appId': appId,
+        'code': code.trim().toUpperCase(),
+      });
+      return Map<String, dynamic>.from(result.data as Map);
+    } on FirebaseFunctionsException catch (e) {
+      throw e.message ?? 'Invitation invalide';
+    }
+  }
 
   Future<void> setMemberRouteAutonomy({
     required String orgId,
@@ -280,7 +316,8 @@ class OrgService {
     bool replaceExisting = false,
   }) async {
     try {
-      final dateId = '${date.year.toString().padLeft(4, '0')}-'
+      final dateId =
+          '${date.year.toString().padLeft(4, '0')}-'
           '${date.month.toString().padLeft(2, '0')}-'
           '${date.day.toString().padLeft(2, '0')}';
       await functions.httpsCallable('assignMemberPlan').call({
@@ -350,15 +387,17 @@ class OrgService {
   CollectionReference<Map<String, dynamic>> memberPlans(
     String orgId,
     String memberUid,
-  ) => orgRef(orgId).collection('memberData').doc(memberUid).collection('plans');
+  ) =>
+      orgRef(orgId).collection('memberData').doc(memberUid).collection('plans');
 
   CollectionReference<Map<String, dynamic>> memberAppointments(
     String orgId,
     String memberUid,
-  ) => orgRef(orgId)
-      .collection('memberData')
-      .doc(memberUid)
-      .collection('appointments');
+  ) =>
+      orgRef(orgId)
+          .collection('memberData')
+          .doc(memberUid)
+          .collection('appointments');
 
   Future<void> requestActivationResend({required String email}) async {
     final normalized = email.trim().toLowerCase();

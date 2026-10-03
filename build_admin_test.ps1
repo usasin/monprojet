@@ -7,6 +7,9 @@ if ($config.ADMIN_TEST_MODE -ne $true) {
 }
 
 Write-Host "BUILD ADMIN TEST - NE PAS PUBLIER SUR LE PLAY STORE" -ForegroundColor Yellow
+& "$PSScriptRoot\verifier_prospecto.ps1"
+if ($LASTEXITCODE -ne 0) { throw "La vérification pré-build a échoué." }
+
 flutter clean
 flutter pub get
 if ($LASTEXITCODE -ne 0) { throw "flutter pub get a échoué." }
@@ -20,6 +23,8 @@ if (Test-Path $apk) {
     Write-Host $apk -ForegroundColor Green
     Write-Host "Premium local actif + pubs désactivées + console développeur visible." -ForegroundColor Green
     Write-Host "Les actions entreprise sensibles restent protégées côté serveur." -ForegroundColor Yellow
+    Write-Host "NOTE : cet APK garde le package Play Store. Google Play peut utiliser une signature différente ; dans ce cas Android refusera l'installation par-dessus l'app Play Store." -ForegroundColor Yellow
+    Write-Host "Pour tester OWNER/MANAGER/REP côté serveur sans paiement, utilisez le compte autorisé prospectoDeveloper." -ForegroundColor Yellow
 } else {
     throw "APK admin introuvable."
 }

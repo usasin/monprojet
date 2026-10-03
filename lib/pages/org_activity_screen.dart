@@ -31,7 +31,7 @@ class OrgActivityScreen extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        body: orgId == null || !org.canManageTeam
+        body: orgId == null || !org.isOwner
             ? const Center(
                 child: LText('Cette section est réservée aux administrateurs.'),
               )

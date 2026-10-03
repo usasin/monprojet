@@ -12,3 +12,4 @@ class LogoWidget extends StatelessWidget {
     );
   }
 }
+

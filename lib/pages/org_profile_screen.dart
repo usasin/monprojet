@@ -182,6 +182,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final org = context.watch<OrgProvider>();
+    if (!org.isOwner) return Scaffold(appBar: AppBar(), body: const Center(child: LText('Accès réservé à l’administrateur principal.')));
     final editable = org.isOwner;
     return BrandBackground(
       animate: true,

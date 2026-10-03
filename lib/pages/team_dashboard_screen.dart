@@ -1,3 +1,8 @@
+import '../sales/sales_insights.dart';
+import '../widgets/member_history_panel.dart';
+import '../models/route_metrics.dart';
+import '../widgets/enterprise_overview.dart';
+
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -21,7 +26,14 @@ import 'select_prospects_page.dart';
 
 class TeamDashboardScreen extends StatefulWidget {
   static const routeName = '/team_dashboard';
-  const TeamDashboardScreen({super.key});
+  const TeamDashboardScreen({
+    super.key,
+    this.embedded = false,
+    this.initialTab = 0,
+    this.personal = false,
+  });
+  final bool embedded, personal;
+  final int initialTab;
 
   @override
   State<TeamDashboardScreen> createState() => _TeamDashboardScreenState();
@@ -64,14 +76,24 @@ class _TeamDashboardScreenState extends State<TeamDashboardScreen> {
     }
 
     final role = org.role?.toUpperCase() ?? 'REP';
-    final isManager = org.canManageTeam;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    final personal =
+        widget.personal || (args is Map && args['personal'] == true);
+    final direct = widget.embedded || (args is Map && args['direct'] == true);
+    final isManager = org.canManageTeam && !personal;
     final isOwner = role == 'OWNER';
-    final pageTitle = isOwner
-        ? 'Direction de l’entreprise'
+    final pageTitle = personal
+        ? 'Ma journée'
+        : isOwner
+        ? 'Mon entreprise'
         : isManager
-            ? 'Pilotage commercial'
-            : 'Mon activité commerciale';
-    final requestedTab = ModalRoute.of(context)?.settings.arguments;
+        ? 'Mon équipe'
+        : 'Ma journée';
+    final requestedTab = widget.embedded
+        ? widget.initialTab
+        : args is Map
+        ? args['tab']
+        : args;
     final initialTab = isManager && requestedTab is int
         ? requestedTab.clamp(0, 3).toInt()
         : 0;
@@ -84,48 +106,71 @@ class _TeamDashboardScreenState extends State<TeamDashboardScreen> {
       blurSigma: 15,
       animate: true,
       child: DefaultTabController(
+        key: ValueKey('$orgId-$role'),
         length: isManager ? 4 : 1,
         initialIndex: initialTab,
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            title: LText(
-              pageTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            bottom: isManager
-                ? TabBar(
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    dividerColor: Colors.transparent,
-                    tabs: [
-                      _CockpitTab(
-                        icon: isOwner
-                            ? Icons.space_dashboard_rounded
-                            : Icons.today_rounded,
-                        label: isOwner ? 'Direction' : 'Aujourd’hui',
-                      ),
-                      const _CockpitTab(
-                        icon: Icons.calendar_month_rounded,
-                        label: 'Planning',
-                      ),
-                      _CockpitTab(
-                        icon: isOwner
-                            ? Icons.admin_panel_settings_rounded
-                            : Icons.groups_2_rounded,
-                        label: isOwner ? 'Équipe & accès' : 'Commerciaux',
-                      ),
-                      const _CockpitTab(
-                        icon: Icons.insights_rounded,
-                        label: 'Performance',
-                      ),
-                    ],
-                  )
-                : null,
-          ),
+          appBar: widget.embedded
+              ? null
+              : AppBar(
+                  title: LText(
+                    direct
+                        ? const [
+                            'Activité du jour',
+                            'Planning équipe',
+                            'Mes commerciaux',
+                            'Performance & reporting',
+                          ][initialTab]
+                        : pageTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  bottom: isManager && !direct
+                      ? TabBar(
+                          isScrollable: true,
+                          tabAlignment: TabAlignment.start,
+                          dividerColor: Colors.transparent,
+                          tabs: [
+                            _CockpitTab(
+                              icon: isOwner
+                                  ? Icons.space_dashboard_rounded
+                                  : Icons.today_rounded,
+                              label: isOwner ? 'Direction' : 'Aujourd’hui',
+                            ),
+                            const _CockpitTab(
+                              icon: Icons.calendar_month_rounded,
+                              label: 'Planning',
+                            ),
+                            _CockpitTab(
+                              icon: isOwner
+                                  ? Icons.admin_panel_settings_rounded
+                                  : Icons.groups_2_rounded,
+                              label: isOwner ? 'Équipe & accès' : 'Commerciaux',
+                            ),
+                            const _CockpitTab(
+                              icon: Icons.insights_rounded,
+                              label: 'Performance',
+                            ),
+                          ],
+                        )
+                      : null,
+                ),
           body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: _service.allMembers(orgId),
+            stream: personal
+                ? _service
+                      .orgRef(orgId)
+                      .collection('members')
+                      .where(
+                        FieldPath.documentId,
+                        isEqualTo: FirebaseAuth.instance.currentUser?.uid,
+                      )
+                      .snapshots()
+                : _service.allMembers(
+                    orgId,
+                    role: role,
+                    uid: FirebaseAuth.instance.currentUser?.uid,
+                  ),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return _ErrorState(message: snapshot.error.toString());
@@ -133,10 +178,11 @@ class _TeamDashboardScreenState extends State<TeamDashboardScreen> {
               if (!snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
-              final members = snapshot.data!.docs
-                  .map((doc) => _MemberView(uid: doc.id, data: doc.data()))
-                  .toList()
-                ..sort(_memberSort);
+              final members =
+                  snapshot.data!.docs
+                      .map((doc) => _MemberView(uid: doc.id, data: doc.data()))
+                      .toList()
+                    ..sort(_memberSort);
 
               if (!isManager) {
                 final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -144,10 +190,15 @@ class _TeamDashboardScreenState extends State<TeamDashboardScreen> {
                 return _CommercialWorkspace(
                   orgId: orgId,
                   member: self,
+                  onAddAppointment: uid == null
+                      ? null
+                      : () => _addAppointment(orgId, uid),
                   service: _service,
                   weekStart: _weekStart,
                   onPreviousWeek: () => setState(
-                    () => _weekStart = _weekStart.subtract(const Duration(days: 7)),
+                    () => _weekStart = _weekStart.subtract(
+                      const Duration(days: 7),
+                    ),
                   ),
                   onNextWeek: () => setState(
                     () => _weekStart = _weekStart.add(const Duration(days: 7)),
@@ -170,68 +221,65 @@ class _TeamDashboardScreenState extends State<TeamDashboardScreen> {
                   .where((m) => m.uid == _selectedMemberUid)
                   .firstOrNull;
 
-              return TabBarView(
-                children: [
-                  _OverviewTab(
-                    org: org,
-                    members: members,
-                    service: _service,
-                    onOpenMember: (member) => _openMemberSheet(orgId, member),
-                  ),
-                  _ManagerCalendarTab(
-                    orgId: orgId,
-                    members: allReps,
-                    selectedMemberUid: _selectedMemberUid,
-                    weekStart: _weekStart,
-                    service: _service,
-                    onMemberChanged: (value) =>
-                        setState(() => _selectedMemberUid = value),
-                    onPreviousWeek: () => setState(
-                      () => _weekStart =
-                          _weekStart.subtract(const Duration(days: 7)),
+              final pages = <Widget>[
+                _OverviewTab(
+                  org: org,
+                  members: members,
+                  service: _service,
+                  onOpenMember: (member) => _openMemberSheet(orgId, member),
+                ),
+                _ManagerCalendarTab(
+                  orgId: orgId,
+                  members: allReps,
+                  selectedMemberUid: _selectedMemberUid,
+                  weekStart: _weekStart,
+                  service: _service,
+                  onMemberChanged: (value) =>
+                      setState(() => _selectedMemberUid = value),
+                  onPreviousWeek: () => setState(
+                    () => _weekStart = _weekStart.subtract(
+                      const Duration(days: 7),
                     ),
-                    onNextWeek: () => setState(
-                      () =>
-                          _weekStart = _weekStart.add(const Duration(days: 7)),
-                    ),
-                    onAssignTour: selectedRep?.isActive == true
-                        ? () => _assignTour(orgId, _selectedMemberUid!)
-                        : null,
-                    onAddAppointment: selectedRep?.isActive == true
-                        ? () => _addAppointment(orgId, _selectedMemberUid!)
-                        : null,
-                    onCancelAppointment: (appointmentId) async {
-                      final uid = _selectedMemberUid;
-                      if (uid == null) return;
-                      try {
-                        await _service.cancelMemberAppointment(
-                          orgId: orgId,
-                          memberUid: uid,
-                          appointmentId: appointmentId,
-                        );
-                        _snack('Rendez-vous annulé.');
-                      } catch (error) {
-                        _snack(error);
-                      }
-                    },
                   ),
-                  _MembersTab(
-                    org: org,
-                    orgId: orgId,
-                    members: members,
-                    service: _service,
-                    busy: _busy,
-                    onBusyChanged: (value) => setState(() => _busy = value),
-                    onMessage: _snack,
-                    onOpenMember: (member) => _openMemberSheet(orgId, member),
+                  onNextWeek: () => setState(
+                    () => _weekStart = _weekStart.add(const Duration(days: 7)),
                   ),
-                  _ResultsTab(
-                    orgId: orgId,
-                    members: allReps,
-                    service: _service,
-                  ),
-                ],
-              );
+                  onAssignTour: selectedRep?.isActive == true
+                      ? () => _assignTour(orgId, _selectedMemberUid!)
+                      : null,
+                  onAddAppointment: selectedRep?.isActive == true
+                      ? () => _addAppointment(orgId, _selectedMemberUid!)
+                      : null,
+                  onCancelAppointment: (appointmentId) async {
+                    final uid = _selectedMemberUid;
+                    if (uid == null) return;
+                    try {
+                      await _service.cancelMemberAppointment(
+                        orgId: orgId,
+                        memberUid: uid,
+                        appointmentId: appointmentId,
+                      );
+                      _snack('Rendez-vous annulé.');
+                    } catch (error) {
+                      _snack(error);
+                    }
+                  },
+                ),
+                _MembersTab(
+                  org: org,
+                  orgId: orgId,
+                  members: isOwner ? members : allReps,
+                  service: _service,
+                  busy: _busy,
+                  onBusyChanged: (value) {
+                    if (mounted) setState(() => _busy = value);
+                  },
+                  onMessage: _snack,
+                  onOpenMember: (member) => _openMemberSheet(orgId, member),
+                ),
+                _ResultsTab(orgId: orgId, members: allReps, service: _service),
+              ];
+              return direct ? pages[initialTab] : TabBarView(children: pages);
             },
           ),
         ),
@@ -284,7 +332,7 @@ class _TeamDashboardScreenState extends State<TeamDashboardScreen> {
     if (_busy) return;
     final result = await showDialog<_TourAssignment>(
       context: context,
-      builder: (_) => _AssignTourDialog(orgId: orgId),
+      builder: (_) => AssignTourDialog(orgId: orgId),
     );
     if (result == null) return;
     setState(() => _busy = true);
@@ -425,31 +473,12 @@ class _OverviewTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final active = members.where((m) => m.isActive).length;
-    final inactive = members.length - active;
     final reps = members.where((m) => m.isActive && m.role == 'REP').toList();
-    final autonomous = reps.where((m) => m.routeAutonomy).length;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
-        _CompanyRoleHeader(org: org),
-        const SizedBox(height: 14),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final width = math.max(140.0, (constraints.maxWidth - 12) / 2);
-            return Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _MetricCard(width: width, icon: Icons.people_alt_rounded, value: '$active', label: 'Membres actifs'),
-                _MetricCard(width: width, icon: Icons.person_off_rounded, value: '$inactive', label: 'Accès inactifs'),
-                _MetricCard(width: width, icon: Icons.route_rounded, value: '$autonomous/${reps.length}', label: 'Commerciaux autonomes'),
-                _MetricCard(width: width, icon: Icons.workspace_premium_rounded, value: '${org.maxSeats ?? active}', label: 'Places du forfait'),
-              ],
-            );
-          },
-        ),
+        EnterpriseOverview(key: ValueKey('today-${org.orgId}-${org.role}')),
         const SizedBox(height: 18),
         const _SectionTitle('Équipe commerciale'),
         const SizedBox(height: 8),
@@ -457,7 +486,8 @@ class _OverviewTab extends StatelessWidget {
           const _EmptyCard(
             icon: Icons.group_add_rounded,
             title: 'Aucun commercial actif',
-            subtitle: 'Invitez un commercial depuis la rubrique Mon entreprise.',
+            subtitle:
+                'L’administrateur peut ajouter ou rattacher des commerciaux depuis Équipe & accès.',
           )
         else
           ...reps.map(
@@ -530,7 +560,9 @@ class _ManagerCalendarTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selected = members.where((m) => m.uid == selectedMemberUid).firstOrNull;
+    final selected = members
+        .where((m) => m.uid == selectedMemberUid)
+        .firstOrNull;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
@@ -574,7 +606,9 @@ class _ManagerCalendarTab extends StatelessWidget {
                   runSpacing: 8,
                   children: [
                     _StatusBadge(
-                      label: selected.isActive ? 'Accès actif' : 'Accès inactif',
+                      label: selected.isActive
+                          ? 'Accès actif'
+                          : 'Accès inactif',
                       color: selected.isActive
                           ? ProspectoColors.green
                           : Colors.grey,
@@ -625,12 +659,14 @@ class _ManagerCalendarTab extends StatelessWidget {
           const _EmptyCard(
             icon: Icons.people_outline_rounded,
             title: 'Aucun commercial sélectionné',
-            subtitle: 'Ajoutez un commercial pour gérer son calendrier.',
+            subtitle:
+                'Votre administrateur doit vous attribuer des commerciaux ; sélectionnez ensuite un commercial.',
           )
         else
           _AgendaPanel(
             orgId: orgId,
             memberUid: selectedMemberUid!,
+            memberName: selected?.displayName,
             weekStart: weekStart,
             service: service,
             canCancelAppointments: true,
@@ -641,7 +677,7 @@ class _ManagerCalendarTab extends StatelessWidget {
   }
 }
 
-class _MembersTab extends StatelessWidget {
+class _MembersTab extends StatefulWidget {
   const _MembersTab({
     required this.org,
     required this.orgId,
@@ -663,84 +699,73 @@ class _MembersTab extends StatelessWidget {
   final ValueChanged<_MemberView> onOpenMember;
 
   @override
+  State<_MembersTab> createState() => _MembersTabState();
+}
+
+class _MembersTabState extends State<_MembersTab> {
+  String _query = '';
+  bool _activeOnly = true;
+  @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+    final members = widget.members
+        .where(
+          (m) =>
+              (!_activeOnly || m.isActive) &&
+              '${m.displayName} ${m.data['email'] ?? ''}'
+                  .toLowerCase()
+                  .contains(_query),
+        )
+        .toList();
+    return Column(
       children: [
-        _RolePermissionsCard(role: org.role ?? 'MANAGER'),
-        const SizedBox(height: 14),
-        ...members.map(
-          (member) => Padding(
-            padding: const EdgeInsets.only(bottom: 9),
-            child: _SurfaceCard(
-              child: Column(
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    onTap: () => onOpenMember(member),
-                    leading: CircleAvatar(
-                      backgroundColor: member.isActive
-                          ? ProspectoColors.green.withOpacity(.14)
-                          : Colors.grey.withOpacity(.15),
-                      foregroundColor: member.isActive
-                          ? ProspectoColors.green
-                          : Colors.grey,
-                      child: Icon(_roleIcon(member.role)),
-                    ),
-                    title: LText(
-                      member.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    subtitle: LText(
-                      '${_roleLabel(member.role)} • ${member.isActive ? 'Accès actif' : 'Accès inactif'}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                  ),
-                  if (member.role == 'REP' && member.isActive) ...[
-                    const Divider(height: 1),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      value: member.routeAutonomy,
-                      title: const LText(
-                        'Tournées en autonomie',
-                        style: TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                      subtitle: LText(
-                        member.routeAutonomy
-                            ? 'Peut créer, modifier et réaliser ses propres tournées.'
-                            : 'Peut uniquement réaliser les tournées et rendez-vous attribués.',
-                      ),
-                      onChanged: busy
-                          ? null
-                          : (enabled) async {
-                              onBusyChanged(true);
-                              try {
-                                await service.setMemberRouteAutonomy(
-                                  orgId: orgId,
-                                  memberUid: member.uid,
-                                  enabled: enabled,
-                                );
-                                onMessage(
-                                  enabled
-                                      ? 'Autonomie activée.'
-                                      : 'Autonomie désactivée.',
-                                );
-                              } catch (error) {
-                                onMessage(error);
-                              } finally {
-                                onBusyChanged(false);
-                              }
-                            },
-                    ),
-                  ],
-                ],
-              ),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: TextField(
+            decoration: const InputDecoration(
+              labelText: 'Rechercher dans mon équipe',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(),
             ),
+            onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
           ),
+        ),
+        Row(
+          children: [
+            const SizedBox(width: 12),
+            Text('${members.length} commerciaux'),
+            const Spacer(),
+            const Text('Actifs'),
+            Switch(
+              value: _activeOnly,
+              onChanged: (v) => setState(() => _activeOnly = v),
+            ),
+          ],
+        ),
+        Expanded(
+          child: members.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: LText(
+                      'Aucun commercial correspondant. Les rattachements sont gérés par votre administrateur.',
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: members.length,
+                  itemBuilder: (context, i) {
+                    final m = members[i];
+                    return ListTile(
+                      title: Text(m.displayName),
+                      subtitle: Text(
+                        '${m.data['email'] ?? ''} · ${m.isActive ? 'Actif' : 'Accès révoqué'}',
+                      ),
+                      leading: const Icon(Icons.person_outline),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => widget.onOpenMember(m),
+                    );
+                  },
+                ),
         ),
       ],
     );
@@ -760,62 +785,7 @@ class _ResultsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<_MemberStats>>(
-      future: _loadStats(orgId, members, service),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return _ErrorState(message: snapshot.error.toString());
-        }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final stats = snapshot.data!;
-        final totalVisits = stats.fold<int>(0, (sum, item) => sum + item.visits);
-        final totalAppointments =
-            stats.fold<int>(0, (sum, item) => sum + item.appointments);
-        final totalClosed = stats.fold<int>(0, (sum, item) => sum + item.closed);
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          children: [
-            const _PeriodNotice(),
-            const SizedBox(height: 12),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final width = math.max(140.0, (constraints.maxWidth - 12) / 2);
-                return Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    _MetricCard(width: width, icon: Icons.storefront_rounded, value: '$totalVisits', label: 'Visites reportées'),
-                    _MetricCard(width: width, icon: Icons.event_available_rounded, value: '$totalAppointments', label: 'Rendez-vous obtenus'),
-                    _MetricCard(width: width, icon: Icons.task_alt_rounded, value: '$totalClosed', label: 'Prospects clôturés'),
-                    _MetricCard(
-                      width: width,
-                      icon: Icons.percent_rounded,
-                      value: totalVisits == 0
-                          ? '0 %'
-                          : '${((totalAppointments / totalVisits) * 100).round()} %',
-                      label: 'Taux de RDV',
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 18),
-            const _SectionTitle('Résultats par commercial'),
-            const SizedBox(height: 8),
-            if (stats.isEmpty)
-              const _EmptyCard(
-                icon: Icons.query_stats_rounded,
-                title: 'Aucune donnée disponible',
-                subtitle: 'Les résultats apparaîtront dès que les commerciaux auront enregistré leurs reportings.',
-              )
-            else
-              ...stats.map((item) => _StatsCard(stats: item)),
-          ],
-        );
-      },
-    );
+    return const SalesInsights();
   }
 
   static Future<List<_MemberStats>> _loadStats(
@@ -825,48 +795,81 @@ class _ResultsTab extends StatelessWidget {
   ) async {
     final start = DateTime.now().subtract(const Duration(days: 30));
     final output = <_MemberStats>[];
-    for (final member in members) {
-      final snap = await service
-          .memberPlans(orgId, member.uid)
-          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-          .get();
-      var visits = 0;
-      var appointments = 0;
-      var present = 0;
-      var absent = 0;
-      var closed = 0;
-      var routes = 0;
-      for (final doc in snap.docs) {
-        final data = doc.data();
-        final ids = List<String>.from(data['prospectIds'] ?? const []);
-        if (ids.isNotEmpty) routes += 1;
-        final reports = Map<String, dynamic>.from(data['reports'] ?? const {});
-        visits += reports.length;
-        for (final raw in reports.values) {
-          final report = Map<String, dynamic>.from(raw as Map);
-          final status = (report['status'] ?? '').toString().toLowerCase();
-          if (status == 'rdv') appointments += 1;
-          if (status == 'présent' || status == 'present') present += 1;
-          if (status == 'absent') absent += 1;
-          if (report['finishedAt'] != null || status == 'clôturé' || status == 'closed') {
-            closed += 1;
-          }
-        }
-      }
-      output.add(
-        _MemberStats(
-          member: member,
-          routes: routes,
-          visits: visits,
-          appointments: appointments,
-          present: present,
-          absent: absent,
-          closed: closed,
+
+    // Les forfaits peuvent compter jusqu'à 25 utilisateurs. On parallélise par
+    // petits groupes pour éviter 25 attentes réseau successives sans créer un
+    // pic de lectures brutal côté Firestore.
+    const batchSize = 6;
+    for (var offset = 0; offset < members.length; offset += batchSize) {
+      final end = math.min(offset + batchSize, members.length);
+      final batch = members.sublist(offset, end);
+      output.addAll(
+        await Future.wait(
+          batch.map(
+            (member) => _loadMemberStats(
+              orgId: orgId,
+              member: member,
+              service: service,
+              start: start,
+            ),
+          ),
         ),
       );
     }
+
     output.sort((a, b) => b.visits.compareTo(a.visits));
     return output;
+  }
+
+  static Future<_MemberStats> _loadMemberStats({
+    required String orgId,
+    required _MemberView member,
+    required OrgService service,
+    required DateTime start,
+  }) async {
+    final snap = await service
+        .memberPlans(orgId, member.uid)
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .get();
+    var visits = 0;
+    var appointments = 0;
+    var present = 0;
+    var absent = 0;
+    var closed = 0;
+    var routes = 0;
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final ids = List<String>.from(data['prospectIds'] ?? const []);
+      if (ids.isNotEmpty) routes += 1;
+      final reports = Map<String, dynamic>.from(data['reports'] ?? const {});
+      visits += ids
+          .toSet()
+          .where((id) => RouteMetrics.hasReport(reports[id]))
+          .length;
+      for (final id in ids.toSet()) {
+        final raw = reports[id];
+        if (!RouteMetrics.hasReport(raw)) continue;
+        final report = Map<String, dynamic>.from(raw as Map);
+        final status = (report['status'] ?? '').toString().toLowerCase();
+        if (status == 'rdv') appointments += 1;
+        if (status == 'présent' || status == 'present') present += 1;
+        if (status == 'absent') absent += 1;
+        if (report['finishedAt'] != null ||
+            status == 'clôturé' ||
+            status == 'closed') {
+          closed += 1;
+        }
+      }
+    }
+    return _MemberStats(
+      member: member,
+      routes: routes,
+      visits: visits,
+      appointments: appointments,
+      present: present,
+      absent: absent,
+      closed: closed,
+    );
   }
 }
 
@@ -874,6 +877,7 @@ class _CommercialWorkspace extends StatelessWidget {
   const _CommercialWorkspace({
     required this.orgId,
     required this.member,
+    this.onAddAppointment,
     required this.service,
     required this.weekStart,
     required this.onPreviousWeek,
@@ -882,6 +886,7 @@ class _CommercialWorkspace extends StatelessWidget {
 
   final String orgId;
   final _MemberView? member;
+  final VoidCallback? onAddAppointment;
   final OrgService service;
   final DateTime weekStart;
   final VoidCallback onPreviousWeek;
@@ -889,40 +894,21 @@ class _CommercialWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final autonomy = member?.routeAutonomy == true;
+    const autonomy = true;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
-        _SurfaceCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              LText(
-                autonomy
-                    ? 'Vous travaillez en autonomie'
-                    : 'Vos tournées sont attribuées par votre responsable',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 6),
-              LText(
-                autonomy
-                    ? 'Vous pouvez créer vos propres tournées et réaliser celles ajoutées par votre responsable commercial.'
-                    : 'Vous pouvez consulter et réaliser les tournées et rendez-vous attribués, puis compléter vos reportings.',
-                style: const TextStyle(color: ProspectoColors.textSecondary),
-              ),
-              const SizedBox(height: 12),
-              _StatusBadge(
-                label: autonomy ? 'Autonomie activée' : 'Tournées attribuées uniquement',
-                color: autonomy ? ProspectoColors.green : ProspectoColors.peach,
-                icon: autonomy ? Icons.directions_run_rounded : Icons.lock_clock_rounded,
-              ),
-            ],
-          ),
+        const EnterpriseOverview(),
+        OutlinedButton.icon(
+          onPressed: onAddAppointment,
+          icon: const Icon(Icons.add),
+          label: const LText('Ajouter un RDV'),
         ),
         const SizedBox(height: 12),
         if (autonomy)
           FilledButton.icon(
-            onPressed: () => Navigator.pushNamed(context, SelectProspectsPage.routeName),
+            onPressed: () =>
+                Navigator.pushNamed(context, SelectProspectsPage.routeName),
             icon: const Icon(Icons.add_road_rounded),
             label: const LText('Créer une tournée'),
           ),
@@ -937,7 +923,8 @@ class _CommercialWorkspace extends StatelessWidget {
           const _EmptyCard(
             icon: Icons.sync_problem_rounded,
             title: 'Profil entreprise indisponible',
-            subtitle: 'Fermez puis rouvrez l’application pour actualiser votre accès.',
+            subtitle:
+                'Fermez puis rouvrez l’application pour actualiser votre accès.',
           )
         else
           _AgendaPanel(
@@ -959,7 +946,8 @@ class _CommercialWorkspace extends StatelessWidget {
             ),
           ),
           secondary: OutlinedButton.icon(
-            onPressed: () => Navigator.pushNamed(context, ReportingPage.routeName),
+            onPressed: () =>
+                Navigator.pushNamed(context, ReportingPage.routeName),
             icon: const Icon(Icons.analytics_rounded),
             label: const LText(
               'Faire le reporting',
@@ -981,8 +969,10 @@ class _AgendaPanel extends StatelessWidget {
     required this.service,
     required this.canCancelAppointments,
     this.onCancelAppointment,
+    this.memberName,
   });
 
+  final String? memberName;
   final String orgId;
   final String memberUid;
   final DateTime weekStart;
@@ -1000,10 +990,12 @@ class _AgendaPanel extends StatelessWidget {
         }
         if (!snapshot.hasData) {
           return const _SurfaceCard(
-            child: Center(child: Padding(
-              padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(),
-            )),
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(),
+              ),
+            ),
           );
         }
         final agenda = snapshot.data!;
@@ -1017,7 +1009,9 @@ class _AgendaPanel extends StatelessWidget {
         return Column(
           children: List.generate(7, (index) {
             final day = weekStart.add(Duration(days: index));
-            final dayPlans = agenda.plans.where((p) => _sameDay(p.date, day)).toList();
+            final dayPlans = agenda.plans
+                .where((p) => _sameDay(p.date, day))
+                .toList();
             final dayAppointments = agenda.appointments
                 .where((a) => _sameDay(a.startsAt, day))
                 .toList();
@@ -1031,9 +1025,14 @@ class _AgendaPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     LText(
-                      DateFormat('EEEE d MMMM', Localizations.localeOf(context).languageCode)
-                          .format(day),
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                      DateFormat(
+                        'EEEE d MMMM',
+                        Localizations.localeOf(context).languageCode,
+                      ).format(day),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                     if (dayPlans.isNotEmpty) ...[
                       const SizedBox(height: 8),
@@ -1043,8 +1042,12 @@ class _AgendaPanel extends StatelessWidget {
                           color: ProspectoColors.blue,
                           title: '${plan.prospectIds.length} visite(s)',
                           subtitle: plan.assignedBy.isNotEmpty
-                              ? 'Tournée attribuée par le responsable'
-                              : 'Tournée créée en autonomie',
+                              ? 'Tournée attribuée par ${plan.assignedByName}'
+                              : context.read<OrgProvider>().canManageTeam &&
+                                    memberUid !=
+                                        FirebaseAuth.instance.currentUser?.uid
+                              ? 'Tournée de ${memberName ?? 'commercial'}'
+                              : 'Ma tournée',
                         ),
                       ),
                     ],
@@ -1082,23 +1085,31 @@ class _AgendaPanel extends StatelessWidget {
 
   Future<_AgendaData> _loadAgenda() async {
     final end = weekStart.add(const Duration(days: 7));
-    final planSnap = await service
-        .memberPlans(orgId, memberUid)
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart))
-        .where('date', isLessThan: Timestamp.fromDate(end))
-        .get();
-    final appointmentSnap = await service
-        .memberAppointments(orgId, memberUid)
-        .where('startsAt', isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart))
-        .where('startsAt', isLessThan: Timestamp.fromDate(end))
-        .get();
+    final snapshots = await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
+      service
+          .memberPlans(orgId, memberUid)
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart))
+          .where('date', isLessThan: Timestamp.fromDate(end))
+          .get(),
+      service
+          .memberAppointments(orgId, memberUid)
+          .where(
+            'startsAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart),
+          )
+          .where('startsAt', isLessThan: Timestamp.fromDate(end))
+          .get(),
+    ]);
+    final planSnap = snapshots[0];
+    final appointmentSnap = snapshots[1];
     final plans = planSnap.docs.map(_PlanView.fromDoc).toList()
       ..sort((a, b) => a.date.compareTo(b.date));
-    final appointments = appointmentSnap.docs
-        .map(_AppointmentView.fromDoc)
-        .where((item) => item.status == 'scheduled')
-        .toList()
-      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+    final appointments =
+        appointmentSnap.docs
+            .map(_AppointmentView.fromDoc)
+            .where((item) => item.status == 'scheduled')
+            .toList()
+          ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
     return _AgendaData(plans: plans, appointments: appointments);
   }
 
@@ -1148,7 +1159,10 @@ class _MemberDetailSheet extends StatelessWidget {
                     member.displayName,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   LText(
                     _roleLabel(member.role),
@@ -1170,7 +1184,9 @@ class _MemberDetailSheet extends StatelessWidget {
             _StatusBadge(
               label: member.isActive ? 'Accès actif' : 'Accès inactif',
               color: member.isActive ? ProspectoColors.green : Colors.grey,
-              icon: member.isActive ? Icons.verified_user_rounded : Icons.person_off_rounded,
+              icon: member.isActive
+                  ? Icons.verified_user_rounded
+                  : Icons.person_off_rounded,
             ),
             if (member.role == 'REP')
               _StatusBadge(
@@ -1219,11 +1235,14 @@ class _MemberDetailSheet extends StatelessWidget {
           },
         ),
         const SizedBox(height: 14),
+        MemberHistoryPanel(orgId: orgId, memberUid: member.uid),
+        const SizedBox(height: 14),
         const _SectionTitle('Prochaines activités'),
         const SizedBox(height: 8),
         _AgendaPanel(
           orgId: orgId,
           memberUid: member.uid,
+          memberName: member.displayName,
           weekStart: _TeamDashboardScreenState._startOfWeek(DateTime.now()),
           service: service,
           canCancelAppointments: false,
@@ -1233,15 +1252,16 @@ class _MemberDetailSheet extends StatelessWidget {
   }
 }
 
-class _AssignTourDialog extends StatefulWidget {
-  const _AssignTourDialog({required this.orgId});
+class AssignTourDialog extends StatefulWidget {
+  const AssignTourDialog({super.key, required this.orgId, this.firestore});
   final String orgId;
+  final FirebaseFirestore? firestore;
 
   @override
-  State<_AssignTourDialog> createState() => _AssignTourDialogState();
+  State<AssignTourDialog> createState() => AssignTourDialogState();
 }
 
-class _AssignTourDialogState extends State<_AssignTourDialog> {
+class AssignTourDialogState extends State<AssignTourDialog> {
   DateTime _date = DateTime.now().add(const Duration(days: 1));
   final _notes = TextEditingController();
   final _search = TextEditingController();
@@ -1256,12 +1276,14 @@ class _AssignTourDialogState extends State<_AssignTourDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final orgRef = FirebaseFirestore.instance
+    final orgRef = (widget.firestore ?? FirebaseFirestore.instance)
         .collection('apps')
         .doc(kAppId)
         .collection('orgs')
         .doc(widget.orgId);
     return AlertDialog(
+      scrollable: true,
+      insetPadding: const EdgeInsets.all(16),
       title: const LText('Attribuer une tournée'),
       content: SizedBox(
         width: math.min(MediaQuery.of(context).size.width * .88, 520.0),
@@ -1281,7 +1303,7 @@ class _AssignTourDialogState extends State<_AssignTourDialog> {
                   firstDate: DateTime.now().subtract(const Duration(days: 1)),
                   lastDate: DateTime.now().add(const Duration(days: 730)),
                 );
-                if (date != null) setState(() => _date = date);
+                if (date != null && mounted) setState(() => _date = date);
               },
             ),
             TextField(
@@ -1294,22 +1316,34 @@ class _AssignTourDialogState extends State<_AssignTourDialog> {
             ),
             const SizedBox(height: 8),
             SizedBox(
-              height: math.min(MediaQuery.of(context).size.height * .42, 360.0),
+              height: 220,
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: orgRef.collection('prospects').orderBy('name').snapshots(),
+                stream: orgRef
+                    .collection('prospects')
+                    .orderBy('name')
+                    .snapshots(),
                 builder: (context, snapshot) {
+                  if (snapshot.hasError)
+                    return const Center(
+                      child: LText('Chargement des prospects impossible.'),
+                    );
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
                   }
                   final query = _search.text.trim().toLowerCase();
                   final prospects = snapshot.data!.docs
                       .map((doc) => Prospect.fromFirestore(doc.data(), doc.id))
-                      .where((p) => query.isEmpty ||
-                          p.name.toLowerCase().contains(query) ||
-                          p.address.toLowerCase().contains(query))
+                      .where(
+                        (p) =>
+                            query.isEmpty ||
+                            p.name.toLowerCase().contains(query) ||
+                            p.address.toLowerCase().contains(query),
+                      )
                       .toList();
                   if (prospects.isEmpty) {
-                    return const Center(child: LText('Aucun prospect disponible.'));
+                    return const Center(
+                      child: LText('Aucun prospect disponible.'),
+                    );
                   }
                   return ListView.builder(
                     shrinkWrap: true,
@@ -1366,13 +1400,13 @@ class _AssignTourDialogState extends State<_AssignTourDialog> {
           onPressed: _selected.isEmpty
               ? null
               : () => Navigator.pop(
-                    context,
-                    _TourAssignment(
-                      date: _date,
-                      prospectIds: _selected.toList(),
-                      notes: _notes.text.trim(),
-                    ),
+                  context,
+                  _TourAssignment(
+                    date: _date,
+                    prospectIds: _selected.toList(),
+                    notes: _notes.text.trim(),
                   ),
+                ),
           icon: const Icon(Icons.send_rounded),
           label: LText('Attribuer (${_selected.length})'),
         ),
@@ -1426,7 +1460,9 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.schedule_rounded),
                 title: const LText('Date et heure'),
-                subtitle: LText(DateFormat('dd/MM/yyyy HH:mm').format(_startsAt)),
+                subtitle: LText(
+                  DateFormat('dd/MM/yyyy HH:mm').format(_startsAt),
+                ),
                 onTap: _pickDateTime,
               ),
               DropdownButtonFormField<int>(
@@ -1436,10 +1472,12 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
                   prefixIcon: Icon(Icons.timer_outlined),
                 ),
                 items: const [30, 45, 60, 90, 120]
-                    .map((minutes) => DropdownMenuItem(
-                          value: minutes,
-                          child: Text('$minutes min'),
-                        ))
+                    .map(
+                      (minutes) => DropdownMenuItem(
+                        value: minutes,
+                        child: Text('$minutes min'),
+                      ),
+                    )
                     .toList(),
                 onChanged: (value) => setState(() => _duration = value ?? 60),
               ),
@@ -1474,15 +1512,15 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
           onPressed: _title.text.trim().isEmpty
               ? null
               : () => Navigator.pop(
-                    context,
-                    _AppointmentDraft(
-                      title: _title.text.trim(),
-                      startsAt: _startsAt,
-                      durationMinutes: _duration,
-                      address: _address.text.trim(),
-                      notes: _notes.text.trim(),
-                    ),
+                  context,
+                  _AppointmentDraft(
+                    title: _title.text.trim(),
+                    startsAt: _startsAt,
+                    durationMinutes: _duration,
+                    address: _address.text.trim(),
+                    notes: _notes.text.trim(),
                   ),
+                ),
           child: const LText('Ajouter'),
         ),
       ],
@@ -1501,9 +1539,15 @@ class _AppointmentDialogState extends State<_AppointmentDialog> {
       context: context,
       initialTime: TimeOfDay.fromDateTime(_startsAt),
     );
-    if (time == null) return;
+    if (time == null || !mounted) return;
     setState(() {
-      _startsAt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      _startsAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
     });
   }
 }
@@ -1528,7 +1572,10 @@ class _CompanyRoleHeader extends StatelessWidget {
                   org.orgName ?? 'Entreprise',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 LText(
                   manager
@@ -1543,34 +1590,6 @@ class _CompanyRoleHeader extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RolePermissionsCard extends StatelessWidget {
-  const _RolePermissionsCard({required this.role});
-  final String role;
-
-  @override
-  Widget build(BuildContext context) {
-    final owner = role.toUpperCase() == 'OWNER';
-    return _SurfaceCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          LText(
-            owner ? 'Vos droits d’administrateur principal' : 'Vos droits de responsable commercial',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 8),
-          LText(
-            owner
-                ? 'Accès complet : identité, forfait, rôles, calendriers, tournées, rendez-vous, reportings et statistiques.'
-                : 'Pilotage opérationnel : commerciaux, autonomie, tournées, rendez-vous, calendriers, reportings et statistiques. Le forfait et la propriété restent réservés à l’administrateur principal.',
-            style: const TextStyle(color: ProspectoColors.textSecondary),
           ),
         ],
       ),
@@ -1673,7 +1692,10 @@ class _MetricCard extends StatelessWidget {
           children: [
             Icon(icon, color: ProspectoColors.blue),
             const SizedBox(height: 8),
-            LText(value, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
+            LText(
+              value,
+              style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w900),
+            ),
             LText(
               label,
               maxLines: 2,
@@ -1700,7 +1722,10 @@ class _MiniMetric extends StatelessWidget {
         color: ProspectoColors.blue.withOpacity(.08),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: LText('$label : $value', style: const TextStyle(fontWeight: FontWeight.w700)),
+      child: LText(
+        '$label : $value',
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
     );
   }
 }
@@ -1733,7 +1758,11 @@ class _StatusBadge extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w800),
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
@@ -1758,7 +1787,10 @@ class _WeekNavigator extends StatelessWidget {
     return _SurfaceCard(
       child: Row(
         children: [
-          IconButton(onPressed: onPrevious, icon: const Icon(Icons.chevron_left_rounded)),
+          IconButton(
+            onPressed: onPrevious,
+            icon: const Icon(Icons.chevron_left_rounded),
+          ),
           Expanded(
             child: LText(
               '${DateFormat('dd/MM').format(weekStart)} → ${DateFormat('dd/MM/yyyy').format(end)}',
@@ -1768,7 +1800,10 @@ class _WeekNavigator extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
-          IconButton(onPressed: onNext, icon: const Icon(Icons.chevron_right_rounded)),
+          IconButton(
+            onPressed: onNext,
+            icon: const Icon(Icons.chevron_right_rounded),
+          ),
         ],
       ),
     );
@@ -1819,7 +1854,10 @@ class _AgendaLine extends StatelessWidget {
                   subtitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: ProspectoColors.textSecondary),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: ProspectoColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -1832,10 +1870,7 @@ class _AgendaLine extends StatelessWidget {
 }
 
 class _ResponsiveActionPair extends StatelessWidget {
-  const _ResponsiveActionPair({
-    required this.primary,
-    required this.secondary,
-  });
+  const _ResponsiveActionPair({required this.primary, required this.secondary});
 
   final Widget primary;
   final Widget secondary;
@@ -1847,11 +1882,7 @@ class _ResponsiveActionPair extends StatelessWidget {
         if (constraints.maxWidth < 390) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              primary,
-              const SizedBox(height: 8),
-              secondary,
-            ],
+            children: [primary, const SizedBox(height: 8), secondary],
           );
         }
         return Row(
@@ -1876,7 +1907,9 @@ class _SurfaceCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: dark ? Colors.white.withOpacity(.08) : Colors.white.withOpacity(.82),
+        color: dark
+            ? Colors.white.withOpacity(.08)
+            : Colors.white.withOpacity(.82),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withOpacity(dark ? .12 : .85)),
         boxShadow: [
@@ -1909,7 +1942,11 @@ class _EmptyCard extends StatelessWidget {
         children: [
           Icon(icon, size: 40, color: ProspectoColors.blue),
           const SizedBox(height: 8),
-          LText(title, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w900)),
+          LText(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 4),
           LText(
             subtitle,
@@ -1928,7 +1965,10 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LText(label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900));
+    return LText(
+      label,
+      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+    );
   }
 }
 
@@ -1979,9 +2019,13 @@ class _MemberView {
   String get role => (data['role'] ?? 'REP').toString().toUpperCase();
   String get status => (data['status'] ?? 'active').toString().toLowerCase();
   bool get isActive => status == 'active';
-  bool get routeAutonomy => role != 'REP' || data['routeAutonomy'] == true;
+  bool get routeAutonomy => true;
   String get displayName {
-    final name = (data['displayName'] ?? data['name'] ?? '').toString().trim();
+    final fullName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'
+        .trim();
+    final name = fullName.isNotEmpty
+        ? fullName
+        : (data['displayName'] ?? data['name'] ?? '').toString().trim();
     final email = (data['email'] ?? '').toString().trim();
     return name.isNotEmpty ? name : (email.isNotEmpty ? email : 'Membre');
   }
@@ -1992,10 +2036,12 @@ class _PlanView {
     required this.date,
     required this.prospectIds,
     required this.assignedBy,
+    required this.assignedByName,
   });
   final DateTime date;
   final List<String> prospectIds;
   final String assignedBy;
+  final String assignedByName;
 
   factory _PlanView.fromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
@@ -2007,6 +2053,7 @@ class _PlanView {
       date: date,
       prospectIds: List<String>.from(data['prospectIds'] ?? const []),
       assignedBy: (data['assignedBy'] ?? '').toString(),
+      assignedByName: (data['assignedByName'] ?? 'Responsable').toString(),
     );
   }
 }

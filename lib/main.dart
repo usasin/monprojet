@@ -1,3 +1,4 @@
+import 'sales/solo_sales_pages.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -71,13 +72,37 @@ class ProspectoProviders extends StatelessWidget {
   }
 }
 
-class ProspectoApp extends StatelessWidget {
+final _appNavigator = GlobalKey<NavigatorState>();
+
+class ProspectoApp extends StatefulWidget {
   const ProspectoApp({super.key});
+  @override
+  State<ProspectoApp> createState() => _ProspectoAppState();
+}
+
+class _ProspectoAppState extends State<ProspectoApp> {
+  int _lastRevocation = 0;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final revision = context.watch<OrgProvider>().accessRevocation;
+    if (revision != _lastRevocation) {
+      _lastRevocation = revision;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted)
+          _appNavigator.currentState?.pushNamedAndRemoveUntil(
+            HomePage.routeName,
+            (_) => false,
+          );
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeProvider>().currentTheme;
     return MaterialApp(
+      navigatorKey: _appNavigator,
       title: 'Prospecto',
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
@@ -103,6 +128,8 @@ class ProspectoApp extends StatelessWidget {
         SelectProspectsPage.routeName: (_) => const SelectProspectsPage(),
         MapPage.routeName: (_) => const MapPage(),
         ReportingPage.routeName: (_) => const ReportingPage(),
+        SoloProspectsPage.routeName: (_) => const SoloProspectsPage(),
+        SoloSalesResultsPage.routeName: (_) => const SoloSalesResultsPage(),
         AllProspectsFinishedPage.routeName: (_) =>
             const AllProspectsFinishedPage(),
         ProspectFormPage.routeName: (_) => const ProspectFormPage(),

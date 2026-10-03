@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import '../config.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
@@ -10,12 +12,14 @@ class FirestoreService {
 
   Future<WorkspaceScope> _scope() => WorkspaceScope.resolve();
 
-  Future<DocumentReference<Map<String, dynamic>>> _prospectRef(String id) async {
+  Future<DocumentReference<Map<String, dynamic>>> _prospectRef(
+      String id) async {
     final scope = await _scope();
     return scope.prospects.doc(id);
   }
 
-  Future<DocumentReference<Map<String, dynamic>>> _planRef(DateTime date) async {
+  Future<DocumentReference<Map<String, dynamic>>> _planRef(
+      DateTime date) async {
     final scope = await _scope();
     return scope.plans.doc(DateFormat('yyyy-MM-dd').format(date));
   }
@@ -51,6 +55,17 @@ class FirestoreService {
 
   Future<void> deleteProspect(String id) async {
     final scope = await _scope();
+    if (scope.isTeam) {
+      await FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('deleteEnterpriseRecord')
+          .call({
+        'appId': kAppId,
+        'orgId': scope.orgId,
+        'kind': 'prospect',
+        'id': id,
+      });
+      return;
+    }
     final ref = scope.prospects.doc(id);
     final existing = await ref.get();
     final name = (existing.data()?['name'] ?? 'Prospect').toString();
@@ -94,7 +109,8 @@ class FirestoreService {
 
     final batch = _db.batch();
     final selectedIds = ids.toSet();
-    for (final prospect in allOptions.where((p) => selectedIds.contains(p.id))) {
+    for (final prospect
+        in allOptions.where((p) => selectedIds.contains(p.id))) {
       batch.set(
         scope.prospects.doc(prospect.id),
         {
@@ -246,7 +262,8 @@ class FirestoreService {
         if (scope.isTeam) 'updatedBy': scope.uid,
         'updatedAt': FieldValue.serverTimestamp(),
       };
-      batch.set(scope.prospects.doc(entry.key), update, SetOptions(merge: true));
+      batch.set(
+          scope.prospects.doc(entry.key), update, SetOptions(merge: true));
       if (nextVisit != null && nextVisit.isAfter(DateTime.now())) {
         reminders.add(MapEntry(entry.key, nextVisit));
       }
@@ -268,7 +285,8 @@ class FirestoreService {
     }
 
     for (final reminder in reminders) {
-      await _scheduleReminderDocuments(reminder.key, reminder.value, scope: scope);
+      await _scheduleReminderDocuments(reminder.key, reminder.value,
+          scope: scope);
     }
   }
 
@@ -300,7 +318,8 @@ class FirestoreService {
     for (final offset in offsets.entries) {
       final dueAt = visitAt.subtract(offset.value);
       if (dueAt.isBefore(DateTime.now())) continue;
-      final id = '${prospectId}_${visitAt.millisecondsSinceEpoch}_${offset.key}';
+      final id =
+          '${prospectId}_${visitAt.millisecondsSinceEpoch}_${offset.key}';
       batch.set(reminders.doc(id), {
         'uid': activeScope.uid,
         if (activeScope.isTeam) 'orgId': activeScope.orgId,
@@ -344,7 +363,8 @@ class FirestoreService {
       final ids = List<String>.from(data['prospectIds'] ?? const []);
       if (ids.isEmpty) continue;
       final reports = Map<String, dynamic>.from(data['reports'] ?? const {});
-      final values = await _fetchProspectsByIds(ids, reports: reports, scope: scope);
+      final values =
+          await _fetchProspectsByIds(ids, reports: reports, scope: scope);
       if (values.isNotEmpty) result[date] = values;
     }
     return result;
@@ -397,7 +417,8 @@ class FirestoreService {
             if (report['prochaineVisite'] != null)
               'prochaineVisite': report['prochaineVisite'],
             if (report['nextVisit'] != null) 'nextVisit': report['nextVisit'],
-            if (report['finishedAt'] != null) 'finishedAt': report['finishedAt'],
+            if (report['finishedAt'] != null)
+              'finishedAt': report['finishedAt'],
           });
           result.add(Prospect.fromFirestore(merged, doc.id));
         }
@@ -453,6 +474,4 @@ class FirestoreService {
       );
     }
   }
-
-
 }

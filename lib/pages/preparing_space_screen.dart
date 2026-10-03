@@ -48,7 +48,7 @@ class _PreparingSpaceScreenState extends State<PreparingSpaceScreen>
   @override
   void initState() {
     super.initState();
-    _run();
+    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _run(); });
   }
 
   Future<void> _run() async {

@@ -32,6 +32,9 @@ void main() {
       'Votre entreprise, en un coup d’œil.',
       'Votre équipe, prête pour le terrain.',
       'Votre journée commerciale, sans dispersion.',
+      'Compte connecté',
+      'Changer de compte',
+      'COMPTE CONNECTÉ',
     ];
 
     for (final key in criticalKeys) {

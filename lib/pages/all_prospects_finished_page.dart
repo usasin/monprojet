@@ -1,3 +1,6 @@
+import 'package:provider/provider.dart';
+import '../providers/org_provider.dart';
+import '../sales/sales_portfolio.dart';
 // lib/pages/all_prospects_finished_page.dart
 import 'package:easy_localization/easy_localization.dart';
 import '../widgets/localized_text.dart';
@@ -11,6 +14,7 @@ import '../widgets/brand_background.dart';
 import 'prospects_finished_page.dart';
 
 import '../theme/prospecto_colors.dart';
+
 class AllProspectsFinishedPage extends StatefulWidget {
   static const routeName = '/prospects_finished_all';
   const AllProspectsFinishedPage({Key? key}) : super(key: key);
@@ -63,7 +67,13 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
         absent++;
       }
     }
-    return _Counts(closed: closed, rdv: rdv, present: present, absent: absent, presentGerant: presentGerant);
+    return _Counts(
+      closed: closed,
+      rdv: rdv,
+      present: present,
+      absent: absent,
+      presentGerant: presentGerant,
+    );
   }
 
   /* ──────────── Camembert ──────────── */
@@ -73,46 +83,43 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
     if (total == 0) return const SizedBox.shrink();
 
     PieChartSectionData s(int v, Color color) => PieChartSectionData(
-      value: v.toDouble(),
-      color: color,
-      radius: r,
-      title: '',
-    );
+          value: v.toDouble(),
+          color: color,
+          radius: r,
+          title: '',
+        );
 
-    return PieChart(PieChartData(
-      centerSpaceRadius: r / 2.2,
-      sectionsSpace: 2,
-      sections: [
-        if (c.present > 0) s(c.present, cs.primary),
-        if (c.absent  > 0) s(c.absent , cs.error),
-        if (c.rdv     > 0) s(c.rdv    , cs.tertiary),
-        if (c.closed  > 0) s(c.closed , cs.secondary),
-      ],
-    ));
+    return PieChart(
+      PieChartData(
+        centerSpaceRadius: r / 2.2,
+        sectionsSpace: 2,
+        sections: [
+          if (c.present > 0) s(c.present, cs.primary),
+          if (c.absent > 0) s(c.absent, cs.error),
+          if (c.rdv > 0) s(c.rdv, cs.tertiary),
+          if (c.closed > 0) s(c.closed, cs.secondary),
+        ],
+      ),
+    );
   }
 
   Chip _chip(String lbl, int n, Color c, ColorScheme cs, TextTheme t) => Chip(
-    avatar: CircleAvatar(backgroundColor: c, radius: 6),
-    label: LText('$lbl ($n)', style: t.bodySmall),
-    backgroundColor: cs.surfaceContainerHighest.withOpacity(.9),
-    visualDensity: VisualDensity.compact,
-    shape: StadiumBorder(side: BorderSide(color: c.withOpacity(.35))),
-  );
+        avatar: CircleAvatar(backgroundColor: c, radius: 6),
+        label: LText('$lbl ($n)', style: t.bodySmall),
+        backgroundColor: cs.surfaceContainerHighest.withOpacity(.9),
+        visualDensity: VisualDensity.compact,
+        shape: StadiumBorder(side: BorderSide(color: c.withOpacity(.35))),
+      );
 
   /* ──────────── En-tête global ──────────── */
   Widget _globalHeader(BuildContext ctx) {
     final cs = Theme.of(ctx).colorScheme;
-    final t  = Theme.of(ctx).textTheme;
+    final t = Theme.of(ctx).textTheme;
     if (_reports.isEmpty) return const SizedBox.shrink();
 
-    final all  = _reports.values.expand((e) => e).toList();
-    final cnt  = _countsFor(all);
-    final pie  = _pieFor(all, cs, r: 56);
-
-    // petite note "score" (exemple)
-    final scoreGerant = (cnt.presentGerant / 10).clamp(0, 1);
-    final scoreClot   = (cnt.closed / 2).clamp(0, 1);
-    final userScore   = ((scoreGerant + scoreClot) / 2) * 10;
+    final all = _reports.values.expand((e) => e).toList();
+    final cnt = _countsFor(all);
+    final pie = _pieFor(all, cs, r: 56);
 
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -123,7 +130,10 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Column(
           children: [
-            LText('Vue globale'.tr(), style: t.titleMedium!.copyWith(fontWeight: FontWeight.w800)),
+            LText(
+              'Vue globale'.tr(),
+              style: t.titleMedium!.copyWith(fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 8),
             SizedBox(height: 150, child: pie),
             const SizedBox(height: 8),
@@ -132,18 +142,26 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
               alignment: WrapAlignment.center,
               runSpacing: -4,
               children: [
-                if (cnt.present > 0) _chip('Présent'.tr(),  cnt.present, cs.primary,    cs, t),
-                if (cnt.absent  > 0) _chip('Absent'.tr(),   cnt.absent , cs.error,      cs, t),
-                if (cnt.rdv     > 0) _chip('RDV'.tr(),      cnt.rdv    , cs.tertiary,   cs, t),
-                if (cnt.closed  > 0) _chip('Clôturé'.tr(),  cnt.closed , cs.secondary,  cs, t),
+                if (cnt.present > 0)
+                  _chip('Présent'.tr(), cnt.present, cs.primary, cs, t),
+                if (cnt.absent > 0)
+                  _chip('Absent'.tr(), cnt.absent, cs.error, cs, t),
+                if (cnt.rdv > 0) _chip('RDV'.tr(), cnt.rdv, cs.tertiary, cs, t),
+                if (cnt.closed > 0)
+                  _chip(
+                    'Rapport finalisé'.tr(),
+                    cnt.closed,
+                    cs.secondary,
+                    cs,
+                    t,
+                  ),
               ],
             ),
             const SizedBox(height: 10),
-            LText('Présents gérants : ${cnt.presentGerant}  ·  Clôtures : ${cnt.closed}',
-                style: t.bodySmall),
-            const SizedBox(height: 4),
-            LText('Note utilisateur : ${userScore.toStringAsFixed(1)}/10',
-                style: t.bodyMedium),
+            LText(
+              'Présents gérants : ${cnt.presentGerant}  ·  Rapports finalisés : ${cnt.closed}',
+              style: t.bodySmall,
+            ),
           ],
         ),
       ),
@@ -161,10 +179,12 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
           runSpacing: -4,
           alignment: WrapAlignment.center,
           children: [
-            if (c.present > 0) _chip('Présent'.tr(),  c.present, cs.primary,   cs, t),
-            if (c.absent  > 0) _chip('Absent'.tr(),   c.absent , cs.error,     cs, t),
-            if (c.rdv     > 0) _chip('RDV'.tr(),      c.rdv    , cs.tertiary,  cs, t),
-            if (c.closed  > 0) _chip('Clôturé'.tr(),  c.closed , cs.secondary, cs, t),
+            if (c.present > 0)
+              _chip('Présent'.tr(), c.present, cs.primary, cs, t),
+            if (c.absent > 0) _chip('Absent'.tr(), c.absent, cs.error, cs, t),
+            if (c.rdv > 0) _chip('RDV'.tr(), c.rdv, cs.tertiary, cs, t),
+            if (c.closed > 0)
+              _chip('Rapport finalisé'.tr(), c.closed, cs.secondary, cs, t),
           ],
         ),
         const SizedBox(height: 6),
@@ -176,10 +196,14 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final t  = Theme.of(context).textTheme;
+    final t = Theme.of(context).textTheme;
 
     return BrandBackground(
-      gradientColors: const [ProspectoColors.backgroundTop, ProspectoColors.blueMist, ProspectoColors.peachMist],
+      gradientColors: const [
+        ProspectoColors.backgroundTop,
+        ProspectoColors.blueMist,
+        ProspectoColors.peachMist,
+      ],
       blurSigma: 14,
       animate: true,
       child: Scaffold(
@@ -188,79 +212,108 @@ class _AllProspectsFinishedPageState extends State<AllProspectsFinishedPage> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
-          title: LText('Historique prospects'.tr(),
-              style: const TextStyle(fontWeight: FontWeight.w800)),
+          title: LText(
+            'Historique prospects'.tr(),
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
         ),
-
         body: _loading
             ? const Center(child: CircularProgressIndicator())
             : (_reports.isEmpty)
-            ? Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.inbox_outlined, color: cs.onSurfaceVariant, size: 48),
-              const SizedBox(height: 8),
-              LText('Aucune prospection terminée.'.tr(),
-                  style: TextStyle(color: cs.onSurfaceVariant)),
-            ],
-          ),
-        )
-            : Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
-            child: ListView.builder(
-              padding: const EdgeInsets.only(bottom: 24),
-              itemCount: _reports.length + 1,
-              itemBuilder: (_, i) {
-                if (i == 0) return _globalHeader(context);
-
-                final idx   = i - 1;
-                final date  = _reports.keys.elementAt(idx);
-                final list  = _reports.values.elementAt(idx);
-                final dateFr = DateFormat.yMMMMd('fr_FR').format(date);
-
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  color : cs.surfaceContainerHighest.withOpacity(.95),
-                  shape : RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                  child: ExpansionTile(
-                    leading: Icon(Icons.folder_rounded, color: cs.primary),
-                    title : LText(dateFr,
-                        style: t.titleMedium!.copyWith(fontWeight: FontWeight.w700)),
-                    subtitle: LText(
-                      '${list.length} ${'prospect${list.length > 1 ? 's' : ''}'}',
-                      style: TextStyle(color: cs.onSurfaceVariant),
-                    ),
-                    childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                    children: [
-                      _dayPie(list, cs, t),
-                      ...list.map(_ProspectTile.new),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 6, right: 4),
-                          child: FilledButton.tonalIcon(
-                            icon : const Icon(Icons.open_in_new_rounded),
-                            label: LText('Voir la fiche'.tr()),
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ProspectsFinishedPage(date: date),
-                              ),
-                            ),
-                          ),
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.inbox_outlined,
+                          color: cs.onSurfaceVariant,
+                          size: 48,
                         ),
+                        const SizedBox(height: 8),
+                        LText(
+                          'Aucune prospection terminée.'.tr(),
+                          style: TextStyle(color: cs.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  )
+                : Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 900),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        itemCount: _reports.length + 1,
+                        itemBuilder: (_, i) {
+                          if (i == 0) return _globalHeader(context);
+
+                          final idx = i - 1;
+                          final date = _reports.keys.elementAt(idx);
+                          final list = _reports.values.elementAt(idx);
+                          final dateFr =
+                              DateFormat.yMMMMd('fr_FR').format(date);
+
+                          return Card(
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            color: cs.surfaceContainerHighest.withOpacity(.95),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: ExpansionTile(
+                              leading: Icon(
+                                Icons.folder_rounded,
+                                color: cs.primary,
+                              ),
+                              title: LText(
+                                dateFr,
+                                style: t.titleMedium!.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              subtitle: LText(
+                                '${list.length} ${'prospect${list.length > 1 ? 's' : ''}'}',
+                                style: TextStyle(color: cs.onSurfaceVariant),
+                              ),
+                              childrenPadding: const EdgeInsets.fromLTRB(
+                                12,
+                                0,
+                                12,
+                                12,
+                              ),
+                              children: [
+                                _dayPie(list, cs, t),
+                                ...list.map(_ProspectTile.new),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(
+                                      top: 6,
+                                      right: 4,
+                                    ),
+                                    child: FilledButton.tonalIcon(
+                                      icon:
+                                          const Icon(Icons.open_in_new_rounded),
+                                      label: LText('Voir la fiche'.tr()),
+                                      onPressed: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              ProspectsFinishedPage(date: date),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                    ],
+                    ),
                   ),
-                );
-              },
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -276,6 +329,22 @@ class _ProspectTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return ListTile(
+      onTap: context.read<OrgProvider>().canManageTeam
+          ? null
+          : () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Fiche prospect')),
+                    body: ProspectSalesDetail(
+                      orgId: context.read<OrgProvider>().isTeam
+                          ? context.read<OrgProvider>().orgId!
+                          : '',
+                      prospect: p,
+                    ),
+                  ),
+                ),
+              ),
       leading: CircleAvatar(
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
@@ -285,11 +354,16 @@ class _ProspectTile extends StatelessWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LText(p.address, style: TextStyle(color: cs.onSurfaceVariant),
-              maxLines: 2, overflow: TextOverflow.ellipsis),
+          LText(
+            p.address,
+            style: TextStyle(color: cs.onSurfaceVariant),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
           const SizedBox(height: 4),
           Wrap(
-            spacing: 6, runSpacing: -4,
+            spacing: 6,
+            runSpacing: -4,
             children: [
               Chip(
                 label: LText(p.category),

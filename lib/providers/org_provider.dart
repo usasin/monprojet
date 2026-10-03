@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../sales/enterprise_display.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,11 @@ class OrgProvider with ChangeNotifier {
   String? _companyPhone;
   String? _website;
   bool _busy = false;
+  int _accessRevocation = 0;
+  int get accessRevocation => _accessRevocation;
+  EnterpriseDisplaySettings _displaySettings =
+      const EnterpriseDisplaySettings();
+  EnterpriseDisplaySettings get displaySettings => _displaySettings;
   bool _isTeam = false;
   bool _teamAvailable = false;
   String? _teamOrgId;
@@ -55,11 +61,11 @@ class OrgProvider with ChangeNotifier {
   bool get developerTest => _developerTest;
   bool get routeAutonomy => _routeAutonomy;
   DateTime? get lastActivityAt => _lastActivityAt;
-  bool get canPlanAutonomously => !_isTeam || canManageTeam || _routeAutonomy;
+  bool get canPlanAutonomously => true;
 
-  bool get canManageTeam => _isTeam &&
-      (_role?.toUpperCase() == 'OWNER' ||
-          _role?.toUpperCase() == 'MANAGER');
+  bool get canManageTeam =>
+      _isTeam &&
+      (_role?.toUpperCase() == 'OWNER' || _role?.toUpperCase() == 'MANAGER');
   bool get isOwner => _isTeam && _role?.toUpperCase() == 'OWNER';
 
   String get roleLabel {
@@ -130,6 +136,7 @@ class OrgProvider with ChangeNotifier {
 
   void clear() {
     _stopTeamWatch();
+    _displaySettings = const EnterpriseDisplaySettings();
     _orgId = null;
     _orgName = null;
     _role = null;
@@ -154,7 +161,11 @@ class OrgProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadFromUser(String uid, {bool preferSavedWorkspace = true}) async {
+  Future<void> loadFromUser(
+    String uid, {
+    bool preferSavedWorkspace = true,
+    bool preferTeam = false,
+  }) async {
     _setBusy(true);
     try {
       final db = FirebaseFirestore.instance;
@@ -164,11 +175,10 @@ class OrgProvider with ChangeNotifier {
 
       final declaredType = data['currentOrgType']?.toString().toLowerCase();
       final oldCurrentId = (data['currentOrgId'] ?? data['orgId'])?.toString();
-      _teamOrgId = (data['teamOrgId'] ??
-              (declaredType == 'team' ? oldCurrentId : null))
-          ?.toString();
-      _teamOrgName = (data['teamOrgName'] ?? data['currentOrgName'] ?? data['orgName'])
-          ?.toString();
+      _teamOrgId = (data['teamOrgId'] ?? oldCurrentId)?.toString();
+      _teamOrgName =
+          (data['teamOrgName'] ?? data['currentOrgName'] ?? data['orgName'])
+              ?.toString();
       _teamRole = (data['teamRole'] ?? data['currentRole'] ?? data['role'])
           ?.toString();
 
@@ -193,7 +203,8 @@ class OrgProvider with ChangeNotifier {
           final org = await orgRef.get();
           memberData = member.data();
           teamData = org.data();
-          _teamAvailable = member.exists &&
+          _teamAvailable =
+              member.exists &&
               memberData?['status']?.toString().toLowerCase() == 'active' &&
               org.exists &&
               _organizationIsAccessible(teamData ?? const {});
@@ -213,6 +224,7 @@ class OrgProvider with ChangeNotifier {
         desiredType = await WorkspacePreferences.lastWorkspace() ?? desiredType;
       }
 
+      if (preferTeam && _teamAvailable) desiredType = 'team';
       if (desiredType == 'team' && _teamAvailable) {
         _applyTeam(teamData ?? const {}, memberData ?? const {});
         await _persistTeamWorkspace(
@@ -258,7 +270,11 @@ class OrgProvider with ChangeNotifier {
     _setBusy(true);
     try {
       final db = FirebaseFirestore.instance;
-      final orgRef = db.collection('apps').doc(kAppId).collection('orgs').doc(id);
+      final orgRef = db
+          .collection('apps')
+          .doc(kAppId)
+          .collection('orgs')
+          .doc(id);
       final memberRef = orgRef.collection('members').doc(uid);
       final org = await orgRef.get();
       final member = await memberRef.get();
@@ -272,7 +288,9 @@ class OrgProvider with ChangeNotifier {
         _teamAvailable = false;
         _applyPersonal();
         await _persistPersonalWorkspace(db.collection('users').doc(uid));
-        throw StateError('Votre accès à cet espace entreprise n’est plus actif.');
+        throw StateError(
+          'Votre accès à cet espace entreprise n’est plus actif.',
+        );
       }
 
       final name = (orgData['name'] ?? 'Entreprise').toString();
@@ -299,7 +317,9 @@ class OrgProvider with ChangeNotifier {
           FirebaseFirestore.instance.collection('users').doc(uid),
         );
         WorkspaceScope.invalidate();
-        throw StateError('Votre accès à cet espace entreprise n’est plus actif.');
+        throw StateError(
+          'Votre accès à cet espace entreprise n’est plus actif.',
+        );
       }
       rethrow;
     } finally {
@@ -307,7 +327,8 @@ class OrgProvider with ChangeNotifier {
     }
   }
 
-  Future<void> refresh(String uid) => loadFromUser(uid, preferSavedWorkspace: false);
+  Future<void> refresh(String uid) =>
+      loadFromUser(uid, preferSavedWorkspace: false);
 
   bool _organizationIsAccessible(Map<String, dynamic> data) {
     final status = (data['status'] ?? 'active').toString().toLowerCase();
@@ -324,6 +345,9 @@ class OrgProvider with ChangeNotifier {
     Map<String, dynamic> orgData,
     Map<String, dynamic> memberData,
   ) {
+    _displaySettings = EnterpriseDisplaySettings.fromMap(
+      orgData['displaySettings'],
+    );
     _isTeam = true;
     _orgId = _teamOrgId;
     _orgName = (orgData['name'] ?? _teamOrgName ?? 'Entreprise').toString();
@@ -337,17 +361,17 @@ class OrgProvider with ChangeNotifier {
     _maxSeats = (orgData['maxSeats'] as num?)?.toInt();
     _subscriptionUntil = _toDate(orgData['subscriptionUntil']);
     _developerTest = orgData['developerTest'] == true;
-    final normalizedRole = _role?.toUpperCase() ?? 'REP';
-    _routeAutonomy = normalizedRole == 'OWNER' || normalizedRole == 'MANAGER'
-        ? true
-        : memberData['routeAutonomy'] == true;
-    _lastActivityAt = _toDate(memberData['lastActivityAt'] ?? memberData['joinedAt']);
+    _routeAutonomy = true;
+    _lastActivityAt = _toDate(
+      memberData['lastActivityAt'] ?? memberData['joinedAt'],
+    );
     _teamOrgName = _orgName;
     _teamRole = _role;
   }
 
   void _applyPersonal() {
     _isTeam = false;
+    _displaySettings = const EnterpriseDisplaySettings();
     _orgId = null;
     _orgName = 'Mon espace personnel';
     _role = 'PERSONAL';
@@ -380,44 +404,40 @@ class OrgProvider with ChangeNotifier {
         .doc(kAppId)
         .collection('orgs')
         .doc(id);
-    _memberWatch = orgRef.collection('members').doc(uid).snapshots().listen(
-      (snapshot) {
-        final data = snapshot.data();
-        if (!snapshot.exists ||
-            data?['status']?.toString().toLowerCase() != 'active') {
-          _handleAccessLost(uid);
-          return;
-        }
-        final role = (data?['role'] ?? _role ?? 'REP').toString().toUpperCase();
-        _role = role;
-        _teamRole = role;
-        _routeAutonomy = role == 'OWNER' || role == 'MANAGER'
-            ? true
-            : data?['routeAutonomy'] == true;
-        _lastActivityAt = _toDate(data?['lastActivityAt'] ?? data?['joinedAt']);
-        WorkspaceScope.invalidate();
+    _memberWatch = orgRef.collection('members').doc(uid).snapshots().listen((
+      snapshot,
+    ) {
+      if (!_isTeam || _teamOrgId != id) return;
+      final data = snapshot.data();
+      if (!snapshot.exists ||
+          data?['status']?.toString().toLowerCase() != 'active') {
+        _handleAccessLost(uid);
+        return;
+      }
+      final role = (data?['role'] ?? _role ?? 'REP').toString().toUpperCase();
+      _role = role;
+      _teamRole = role;
+      _routeAutonomy = true;
+      _lastActivityAt = _toDate(data?['lastActivityAt'] ?? data?['joinedAt']);
+      WorkspaceScope.invalidate();
+      notifyListeners();
+    }, onError: (Object error) => _handleWatchError(uid, error));
+    _orgWatch = orgRef.snapshots().listen((snapshot) {
+      if (!_isTeam || _teamOrgId != id) return;
+      final data = snapshot.data();
+      if (!snapshot.exists || !_organizationIsAccessible(data ?? const {})) {
+        _handleAccessLost(uid);
+        return;
+      }
+      if (_isTeam) {
+        _applyTeam(data ?? const {}, {
+          'role': _role,
+          'routeAutonomy': _routeAutonomy,
+          'lastActivityAt': _lastActivityAt,
+        });
         notifyListeners();
-      },
-      onError: (Object error) => _handleWatchError(uid, error),
-    );
-    _orgWatch = orgRef.snapshots().listen(
-      (snapshot) {
-        final data = snapshot.data();
-        if (!snapshot.exists || !_organizationIsAccessible(data ?? const {})) {
-          _handleAccessLost(uid);
-          return;
-        }
-        if (_isTeam) {
-          _applyTeam(data ?? const {}, {
-            'role': _role,
-            'routeAutonomy': _routeAutonomy,
-            'lastActivityAt': _lastActivityAt,
-          });
-          notifyListeners();
-        }
-      },
-      onError: (Object error) => _handleWatchError(uid, error),
-    );
+      }
+    }, onError: (Object error) => _handleWatchError(uid, error));
   }
 
   void _handleWatchError(String uid, Object error) {
@@ -431,9 +451,7 @@ class OrgProvider with ChangeNotifier {
     _handlingAccessLoss = true;
     try {
       _stopTeamWatch();
-      await _persistPersonalWorkspace(
-        FirebaseFirestore.instance.collection('users').doc(uid),
-      );
+      _accessRevocation++;
       _teamAvailable = false;
       _teamOrgId = null;
       _teamOrgName = null;
@@ -443,6 +461,9 @@ class OrgProvider with ChangeNotifier {
           'Vous n’avez plus accès à cet espace entreprise. Votre espace personnel a été ouvert.';
       WorkspaceScope.invalidate();
       notifyListeners();
+      await _persistPersonalWorkspace(
+        FirebaseFirestore.instance.collection('users').doc(uid),
+      );
     } catch (_) {
       // La vérification sera reprise au prochain lancement ou changement d’espace.
     } finally {

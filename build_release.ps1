@@ -15,6 +15,10 @@ if (-not $hasExpectedAdmobAppId) {
     throw "ID d'application AdMob incorrect pour Prospecto. Attendu : $expectedAdmobAppId"
 }
 
+# Le build n'est lancé que si configuration + analyse statique + tests passent.
+& "$PSScriptRoot\verifier_prospecto.ps1" -Production
+if ($LASTEXITCODE -ne 0) { throw "La vérification pré-build a échoué." }
+
 Write-Host "Nettoyage de Prospecto..." -ForegroundColor Cyan
 flutter clean
 Remove-Item ".dart_tool" -Recurse -Force -ErrorAction SilentlyContinue
@@ -33,6 +37,7 @@ $aab = Join-Path $PSScriptRoot "build\app\outputs\bundle\release\app-release.aab
 if (Test-Path $aab) {
     Write-Host "`nAAB créé avec succès :" -ForegroundColor Green
     Write-Host $aab -ForegroundColor Green
+    Write-Host "Version contrôlée : 1.3.14+44 / ADMIN_TEST_MODE=false" -ForegroundColor Green
 } else {
     throw "Le build s'est terminé, mais l'AAB est introuvable."
 }

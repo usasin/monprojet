@@ -10,23 +10,42 @@ import '../pages/preparing_space_screen.dart';
 import '../providers/org_provider.dart';
 import '../theme/prospecto_colors.dart';
 import 'company_avatar.dart';
+import 'account_avatar.dart';
 
 class WorkspaceBadge extends StatelessWidget {
   const WorkspaceBadge({super.key, this.compact = false});
 
   final bool compact;
 
+  static String _identityLabel(User? user) {
+    if (user == null) return 'Non connecté';
+    if (user.isAnonymous) return 'Session invitée';
+
+    final email = user.email?.trim();
+    if (email?.isNotEmpty == true) return email!;
+
+    final displayName = user.displayName?.trim();
+    if (displayName?.isNotEmpty == true) return displayName!;
+
+    return 'Compte Prospecto';
+  }
+
   @override
   Widget build(BuildContext context) {
     final org = context.watch<OrgProvider>();
+    final user = FirebaseAuth.instance.currentUser;
     final color = org.isTeam ? ProspectoColors.green : ProspectoColors.blue;
+    final identity = _identityLabel(user);
+    final workspaceTitle = org.isTeam
+        ? '${org.orgName ?? 'Entreprise'} • ${org.roleLabel}'
+        : 'Personnel';
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () => _showWorkspacePicker(context),
         borderRadius: BorderRadius.circular(999),
         child: Container(
-          constraints: BoxConstraints(maxWidth: compact ? 245 : 280),
+          constraints: BoxConstraints(maxWidth: compact ? 310 : 340),
           padding: EdgeInsets.fromLTRB(
             compact ? 8 : 10,
             compact ? 6 : 7,
@@ -48,18 +67,9 @@ class WorkspaceBadge extends StatelessWidget {
                   size: compact ? 25 : 30,
                 )
               else
-                Container(
-                  width: compact ? 25 : 30,
-                  height: compact ? 25 : 30,
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(.16),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.person_rounded,
-                    size: compact ? 15 : 18,
-                    color: color,
-                  ),
+                AccountAvatar(
+                  user: user,
+                  size: compact ? 25 : 30,
                 ),
               const SizedBox(width: 8),
               Flexible(
@@ -68,26 +78,25 @@ class WorkspaceBadge extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     LText(
-                      org.workspaceLabel,
+                      workspaceTitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: color,
-                        fontSize: compact ? 11 : 12,
+                        fontSize: compact ? 10.5 : 12,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    if (org.isTeam)
-                      LText(
-                        '${org.orgName ?? 'Entreprise'} • ${org.roleLabel}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: compact ? 9.5 : 10.5,
-                          color: ProspectoColors.textSecondary,
-                          fontWeight: FontWeight.w700,
-                        ),
+                    LText(
+                      identity,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compact ? 9.2 : 10.5,
+                        color: ProspectoColors.textSecondary,
+                        fontWeight: FontWeight.w700,
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -102,16 +111,23 @@ class WorkspaceBadge extends StatelessWidget {
 
   Future<void> _showWorkspacePicker(BuildContext context) async {
     final org = context.read<OrgProvider>();
+    final identity = _identityLabel(FirebaseAuth.instance.currentUser);
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 0, 18, 22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          18,
+          0,
+          18,
+          18 + MediaQuery.viewPaddingOf(sheetContext).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
               const LText(
                 'Changer d’espace',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
@@ -120,6 +136,28 @@ class WorkspaceBadge extends StatelessWidget {
               const LText(
                 'Les données personnelles et celles de l’entreprise restent séparées.',
                 style: TextStyle(color: ProspectoColors.textSecondary),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: ProspectoColors.blue.withOpacity(.08),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.account_circle_rounded, color: ProspectoColors.blue, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: LText(
+                        'Compte : $identity',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 16),
               _WorkspaceOption(
@@ -168,8 +206,7 @@ class WorkspaceBadge extends StatelessWidget {
                   }
                 },
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -26,6 +27,7 @@ class AdService {
   DateTime? _lastInterstitialAt;
   DateTime? _premiumCheckedAt;
   bool? _cachedPremium;
+  String? _cachedPremiumUid;
   bool _initialized = false;
   bool _canRequestAds = false;
   bool _showingFullScreen = false;
@@ -80,6 +82,7 @@ class AdService {
   /// Permet aux écrans d'abonnement de mettre immédiatement à jour le statut
   /// sans refaire une lecture Firestore au prochain affichage publicitaire.
   void setPremiumStatus(bool premium) {
+    _cachedPremiumUid = FirebaseAuth.instance.currentUser?.uid;
     _cachedPremium = premium;
     _premiumCheckedAt = DateTime.now();
     if (premium) {
@@ -91,6 +94,15 @@ class AdService {
   }
 
   Future<bool> _isPremium() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (_cachedPremiumUid != uid) {
+      _cachedPremiumUid = uid;
+      _cachedPremium = null;
+      _premiumCheckedAt = null;
+      _interstitial?.dispose();
+      _interstitial = null;
+    }
+
     final checkedAt = _premiumCheckedAt;
     if (_cachedPremium != null &&
         checkedAt != null &&
@@ -103,6 +115,7 @@ class AdService {
       await meter.initIfNeeded();
       await meter.syncFromCloud();
       final premium = await meter.isPremium();
+      _cachedPremiumUid = uid;
       _cachedPremium = premium;
       _premiumCheckedAt = DateTime.now();
       return premium;
@@ -185,6 +198,19 @@ class AdService {
       },
     );
     ad.show();
+  }
+
+  /// Vide tout état publicitaire lié au compte lors d'une déconnexion.
+  /// Le cooldown reste volontairement commun à l'appareil : changer de compte
+  /// ne permet pas de contourner la fréquence maximale des interstitiels.
+  void resetAccountCache() {
+    _cachedPremiumUid = null;
+    _cachedPremium = null;
+    _premiumCheckedAt = null;
+    _showingFullScreen = false;
+    _interstitial?.dispose();
+    _interstitial = null;
+    if (_canRequestAds) _loadInterstitial();
   }
 
   void dispose() {

@@ -1,19 +1,75 @@
 workflows:
-  build_app:
-    name: "Build Application"
+  prospecto-ios:
+    name: Prospecto 1.6.0 — iOS signé / TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    integrations:
+      app_store_connect: Codemagic-Prospecto
     environment:
-      flutter: stable       # ou spécifier une version stable précise si nécessaire
-      xcode: latest         # utilise la dernière version Xcode disponible sur Codemagic
+      flutter: 3.44.8
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        certificates:
+          - ios_distribution_all_apps_2026
+      vars:
+        BUNDLE_ID: com.ainego.aiProspectGps
+    cache:
+      cache_paths:
+        - ~/.pub-cache
+        - ~/Library/Caches/CocoaPods
     scripts:
-      - name: 📦 Install dependencies
+      - name: Verify final Prospecto source and Apple SDK
         script: |
+          set -euo pipefail
+          python3 tools/verify_ios_source.py
+          xcodebuild -version
+          python3 - <<'PY'
+          import subprocess, re
+          version = subprocess.check_output(['xcodebuild', '-version'], text=True)
+          assert int(re.search(r'Xcode (\d+)', version)[1]) >= 26, 'Xcode 26+ required'
+          PY
+      - name: Resolve Apple app and permanent shared signing
+        script: |
+          set -euo pipefail
+          python3 tools/prepare_ios_signing.py
+      - name: Install Flutter and iOS dependencies
+        script: |
+          set -euo pipefail
+          flutter config --no-enable-swift-package-manager
           flutter pub get
-      - name: 🛠 Build Android release
+          cd ios
+          pod install --repo-update
+      - name: Check Dart errors and regression tests before archive
         script: |
-          flutter build apk --release --dart-define-from-file=config/prod.json
-      - name: 🛠 Build iOS IPA
+          set -euo pipefail
+          flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos
+          flutter test --no-pub
+      - name: Configure app-specific App Store profile
         script: |
-          bash build_ios_release.sh
+          set -euo pipefail
+          xcode-project use-profiles
+          test -f /Users/builder/export_options.plist
+      - name: Build signed Prospecto IPA
+        script: |
+          set -euo pipefail
+          flutter build ipa --release --no-pub \
+            --build-name=1.6.0 --build-number="$APP_BUILD_NUMBER" \
+            --dart-define-from-file=config/prod.json \
+            --dart-define=ADMIN_TEST_MODE=false \
+            --dart-define=ADMOB_IOS_BANNER_ID=ca-app-pub-1360261396564293/9926370092 \
+            --dart-define=ADMOB_IOS_INTERSTITIAL_ID=ca-app-pub-1360261396564293/4594152361 \
+            --export-options-plist=/Users/builder/export_options.plist
+      - name: Verify IPA identity Firebase SDK and signature
+        script: |
+          set -euo pipefail
+          python3 tools/verify_ios_ipa.py
     artifacts:
-      - build/app/outputs/flutter-apk/app-release.apk
       - build/ios/ipa/*.ipa
+      - build/ios/archive/Runner.xcarchive/dSYMs/*.dSYM
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false

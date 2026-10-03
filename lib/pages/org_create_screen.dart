@@ -17,6 +17,8 @@ import '../services/org_service.dart';
 import '../services/workspace_scope.dart';
 import '../providers/org_provider.dart';
 import '../widgets/brand_background.dart';
+import '../widgets/user_identity_card.dart';
+import '../services/account_session_service.dart';
 import 'billing_screen.dart';
 import 'home_page.dart';
 import 'preparing_space_screen.dart';
@@ -157,6 +159,16 @@ class _OrgCreateScreenState extends State<OrgCreateScreen> {
       }, SetOptions(merge: true));
       await _afterAuth(cred.user!);
     } on FirebaseAuthException catch (e) { _snack(e.message ?? e.code); }
+  }
+
+  Future<void> _changeAccount() async {
+    await AccountSessionService.signOut(forceAccountPicker: true);
+    if (!mounted) return;
+    context.read<OrgProvider>().clear();
+    setState(() {
+      _emailCtrl.clear();
+      _passCtrl.clear();
+    });
   }
 
   Future<void> _googleLogin() async {
@@ -301,6 +313,14 @@ class _OrgCreateScreenState extends State<OrgCreateScreen> {
                         child: const LinearProgressIndicator(minHeight: 3, color: _P.indigo),
                       ),
                     if (_busy || _checking) const SizedBox(height: 8),
+
+                    if (!_needsAuth) ...[
+                      UserIdentityCard(
+                        compact: true,
+                        onChangeAccount: _changeAccount,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
 
                     // ── Étape 1 : Code d'activation
                     _StepCard(

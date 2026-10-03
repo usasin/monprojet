@@ -1,0 +1,12 @@
+PROSPECTO 1.3.14+44 — RC5 ÉCRAN ENTREPRISE VIDE
+
+Correctif ciblé :
+- l'accueil Entreprise affiche immédiatement une carte entreprise + les actions métier ;
+- aucune lecture réseau n'est nécessaire pour afficher l'accueil ;
+- la position de défilement est remise en haut lors du passage Personnel/Entreprise ;
+- le cockpit détaillé reste accessible via Direction/Pilotage commercial ;
+- aucun changement Stripe/Firebase/activation.
+
+Après extraction dans C:\dev\prospecto :
+  .\verifier_prospecto.ps1
+  flutter run
