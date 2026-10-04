@@ -75,6 +75,7 @@ La livraison complète Entreprise a remplacé la version GitHub 1.3.12+42. Le co
 | 6 | `6ac1e5027394575b200ae36b` | `e10743906c439644aa7e6cbe1e66c81f0961236c` | Tests ordinaires réussis ; capture native arrêtée sur les traductions non chargées. Aucune IPA 52. |
 | 7 | `6ac1ebc37394575b200ae497` | `290ffecf59c05da49af5cc9298349329937af8d9` | Échec après 32 min 4 s : quatrième capture cherchait EnterpriseWorkspace, masqué par la fiche prospect (`Bad state: No element`, ligne 84). Aucune IPA 52. |
 | 8 | `6ac21ffd7394575b200aef18` | `9efa8efd699359b4889089e339f20952d168bead` | Annulé après 21 min 9 s, avant l’archive. Analyse et 101 tests réussis, dont les quatre navigations iPhone/iPad. Le contrôle visuel des artefacts du build 7 a révélé une première capture noire « Test starting… ». Attente du rendu natif et contrôle des pixels ajoutés avant relance. |
+| 9 | `6ac2259a7394575b200af06e` | `311788effeeda48fc69b096341f141292deb8047` | En cours. Analyse et 101 tests Flutter réussis ; compilation des captures natives en cours. Nouvelle attente du rendu et rejet des captures noires. Aucune nouvelle IPA confirmée. |
 
 Le parcours de capture est partagé entre les tests widgets rapides et l’intégration native. Le navigateur racine est conservé par une clé ; aucune recherche d’un écran masqué après ouverture de la fiche. Le code de capture reste isolé de la version de production.
 
@@ -94,7 +95,7 @@ Quota observé pendant le build 8 : 86/500 minutes gratuites utilisées, avant d
 
 ### Blocages à lever avant soumission
 
-1. Lancer une compilation sur le correctif de rendu natif, puis attendre son résultat exact ; vérifier dimensions et contenu des quatre captures natives par famille, puis remplacer les anciens visuels iPhone/iPad. Utiliser l’écran natif Accès Premium pour les captures de revue des abonnements.
+1. Attendre le résultat exact du build 9 déjà lancé ; vérifier dimensions et contenu des quatre captures natives par famille, puis remplacer les anciens visuels iPhone/iPad. Utiliser l’écran natif Accès Premium pour les captures de revue des abonnements.
 2. Vérifier l’envoi Apple et le traitement du nouveau build ; sélectionner ce build dans la fiche 1.6.0.
 3. Firebase a été relu après reconnexion : 33 fonctions, pages 1 et 2 contrôlées. `getApplePurchaseAccount`, `verifyApplePurchase` et `appStoreNotifications` restent absentes. Le serveur des achats Apple n’est pas déployé. Cloud Shell embarqué est inaccessible dans ce navigateur. Une commande clone/pin du commit `9efa8efd699359b4889089e339f20952d168bead`, puis `deployer_achats_apple_cloud_shell.sh quiz-commercial`, a été fournie pour le Cloud Shell du téléphone. Ne pas répéter les quatre fonctions Entreprise déjà déployées.
 4. Relever l’URL réelle d’appStoreNotifications après déploiement, et configurer les notifications Apple V2 Production et Sandbox.
@@ -107,3 +108,13 @@ Quota observé pendant le build 8 : 86/500 minutes gratuites utilisées, avant d
 - Artefacts du build 7 téléchargés et inspectés : trois PNG iPhone, 1320 × 2868. Le portefeuille et la fiche prospect affichent l’interface actuelle ; la vue Entreprise affiche encore la surface de démarrage du test. Ces fichiers ne doivent pas être téléversés ensemble dans Apple.
 - Le contrôle natif ajouté attend une seconde après le dessin, contrôle les pixels clairs de la fixture, et retente au maximum trois fois. Même nom de fichier conservé ; seules quatre images finales sont attendues. Vérification sur les artefacts réels : première image rejetée (0,5 % de pixels clairs), deux suivantes acceptées (98,1 %). Aucun fichier de démarrage ne doit être publié.
 - Business Apple vérifié : Free Apps Agreement Active (27 août 2026–27 août 2027), conformité DSA Active, **Paid Apps Agreement New**. Apple demande la mise à jour de l’entité légale avant signature. Le contrat payant n’a pas été signé. L’utilisateur doit valider lui-même ses informations et la signature avant commercialisation des abonnements.
+
+
+### Avancement enregistré dans Apple pendant la reprise
+
+- Les deux captures natives iPhone correctes du build 7 ont été exportées en JPEG, sans redimensionnement, puis importées dans le format **iPhone 6,9 pouces** de la fiche française 1.6.0. Apple affiche **2 of 10 Screenshots**. Ordre enregistré : `02-portefeuille.jpg`, puis `03-fiche-prospect.jpg`.
+- La première capture noire n’a pas été téléversée. Après production du build 9, ajouter la vue Entreprise correcte en première position ; vérifier et ajouter l’accès Premium et les captures iPad. Les 8 anciens visuels iPhone 6,5 pouces et les 3 anciens visuels iPad restent présents ; le remplacement complet n’est pas terminé.
+- Les notes mensuelles ont été relues après reconnexion et sont bien enregistrées. Les notes annuelles ont été enregistrées dans cette reprise. Captures de revue des abonnements toujours manquantes.
+- Quota Codemagic actualisé après annulation du build 8 : **107/500 minutes gratuites utilisées**, avant décompte du build 9 ; prochaine échéance 1er novembre 2026, solde 0 USD.
+- Le contrat Apple payant reste **New** ; le formulaire Edit Legal Entity affiche le titulaire existant, type Individual, et son adresse à vérifier. Aucune information d’identité n’a été inventée ou modifiée et aucun contrat n’a été accepté. L’étape légale est réservée à l’utilisateur.
+- Les pages Apple et Codemagic sont préparées pour continuer sur les mêmes produits, signature, branche et build. Ne pas créer un nouveau groupe, une nouvelle application ou une nouvelle compilation pour résoudre une expiration de session.
