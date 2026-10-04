@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ai_prospect_gps/providers/org_provider.dart';
 import 'package:ai_prospect_gps/widgets/workspace_badge.dart';
 import 'appstore_fixture.dart';
+import 'test_localization.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +23,7 @@ void main() {
       EasyLocalization(
         supportedLocales: const [Locale('fr')],
         path: 'assets/translations',
+        assetLoader: const TestTranslations(),
         startLocale: const Locale('fr'),
         saveLocale: false,
         child: ChangeNotifierProvider<OrgProvider>(

@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ai_prospect_gps/pages/billing_screen.dart';
+import 'test_localization.dart';
 
 Widget localized(Widget child) => EasyLocalization(
   supportedLocales: const [Locale('fr')],
   path: 'assets/translations',
+  assetLoader: const TestTranslations(),
   startLocale: const Locale('fr'),
   saveLocale: false,
   child: Builder(
