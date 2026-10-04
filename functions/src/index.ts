@@ -10,6 +10,7 @@ import {onSchedule} from "firebase-functions/v2/scheduler";
 import {google} from "googleapis";
 
 export {stripeWebhook, stripeActivationPage, resendStripeActivationCode} from "./stripe_enterprise";
+export {getApplePurchaseAccount, verifyApplePurchase, appStoreNotifications} from "./apple_purchase";
 
 if (getApps().length === 0) initializeApp();
 const db = getFirestore();
@@ -1255,6 +1256,9 @@ export const verifyGooglePlayPurchase = onCall({region, timeoutSeconds: 60}, asy
         productId,
         premiumUntil: Timestamp.fromMillis(expiryMs),
         purchaseTokenHash: tokenHash,
+        billingProvider: "google_play",
+        appleSubscriptionKey: FieldValue.delete(),
+        appleEnvironment: FieldValue.delete(),
         verifiedAt: FieldValue.serverTimestamp(),
         subscriptionState: state,
       },

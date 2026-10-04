@@ -8,6 +8,7 @@ cp "$SOURCE_DIR/firebase.json" "$SOURCE_DIR/firestore.rules" "$SOURCE_DIR/firest
 mkdir "$DEPLOY_DIR/functions"
 cp "$SOURCE_DIR/functions/package.json" "$SOURCE_DIR/functions/package-lock.json" "$SOURCE_DIR/functions/tsconfig.json" "$DEPLOY_DIR/functions/"
 cp -R "$SOURCE_DIR/functions/src" "$DEPLOY_DIR/functions/"
+cp -R "$SOURCE_DIR/functions/certificates" "$DEPLOY_DIR/functions/"
 cd "$DEPLOY_DIR/functions"
 npm ci
 npm run build

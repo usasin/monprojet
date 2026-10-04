@@ -25,7 +25,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 /// Role-specific navigation. Administrative roles never inherit Solo shortcuts.
 class EnterpriseWorkspace extends StatefulWidget {
-  const EnterpriseWorkspace({super.key});
+  const EnterpriseWorkspace({super.key, this.controller, this.auth});
+  final EnterpriseController? controller;
+  final FirebaseAuth? auth;
   @override
   State<EnterpriseWorkspace> createState() => _EnterpriseWorkspaceState();
 }
@@ -38,11 +40,15 @@ class _EnterpriseWorkspaceState extends State<EnterpriseWorkspace> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final org = context.watch<OrgProvider>();
+    if (widget.controller != null) {
+      _enterprise = widget.controller;
+      return;
+    }
     final ownerOrg = org.canManageTeam
         ? '${org.orgId}:${org.role}:${FirebaseAuth.instance.currentUser?.uid}'
         : null;
     if (ownerOrg != _enterpriseOrg) {
-      _enterprise?.dispose();
+      if (widget.controller == null) _enterprise?.dispose();
       _enterpriseOrg = ownerOrg;
       _enterprise = ownerOrg == null
           ? null
@@ -159,7 +165,7 @@ class _EnterpriseWorkspaceState extends State<EnterpriseWorkspace> {
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
-            title: const WorkspaceBadge(compact: true),
+            title: WorkspaceBadge(compact: true, auth: widget.auth),
             titleSpacing: 8,
             actions: [
               IconButton(

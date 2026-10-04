@@ -72,7 +72,7 @@ latest = subprocess.check_output([
     "app-store-connect", "get-latest-build-number", app["id"],
     "--platform", "IOS", "--all-versions"
 ], text=True).strip()
-next_build = max(51, int(latest) + 1)
+next_build = max(52, int(latest) + 1)
 with open(os.environ["CM_ENV"], "a") as env:
     env.write(f'APP_STORE_APPLE_ID={app["id"]}\nAPP_BUILD_NUMBER={next_build}\n')
 print(f'Prospecto Apple ID: {app["id"]}; version 1.6.0; build {next_build}')
