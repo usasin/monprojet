@@ -782,5 +782,19 @@
   "La photo doit peser moins de 5 Mo.": "The photo must be under 5 MB.",
   "Vue d’ensemble, planning, équipe & accès, performance": "Overview, planning, team & access, performance",
   "Voir l’identité et mon accès": "View identity and my access",
-  "Abonnement": "Subscription"
+  "Abonnement": "Subscription",
+  "Abonnements": "Subscriptions",
+  "Votre espace d’équipe": "Your team workspace",
+  "Les offres mensuelles et annuelles sont disponibles dans l’App Store. Consultez leur prix avant de confirmer votre abonnement.": "Monthly and annual plans are available in the App Store. Review the price before confirming your subscription.",
+  "Accédez à l’espace mis à disposition par votre entreprise avec le code transmis par votre administrateur.": "Access the workspace provided by your company using the code from your administrator.",
+  "Voir les offres Premium": "View Premium plans",
+  "J’ai un code d’entreprise": "I have a company code",
+  "Tournées et prospects illimités, optimisation et utilisation sans publicité.": "Unlimited routes and prospects, optimization and an ad-free experience.",
+  "Les offres sont temporairement indisponibles. Réessayez dans quelques instants.": "Plans are temporarily unavailable. Please try again shortly.",
+  "Connectez-vous pour conserver votre abonnement.": "Sign in to keep your subscription linked to your account.",
+  "Connectez-vous pour restaurer votre abonnement.": "Sign in to restore your subscription.",
+  "L’achat n’a pas pu démarrer. Réessayez.": "The purchase could not start. Please try again.",
+  "Restauration indisponible. Réessayez plus tard.": "Restore is unavailable. Please try again later.",
+  "Abonnement mensuel ou annuel avec renouvellement automatique. Le paiement est débité de votre compte Apple. Gérez ou annulez l’abonnement dans les réglages de votre compte Apple avant la fin de la période en cours.": "Monthly or annual auto-renewing subscription. Payment is charged to your Apple account. Manage or cancel your subscription in your Apple account settings before the end of the current period.",
+  "Si un code actif correspond à cette adresse, un e-mail de récupération vient d’être demandé. Vous pouvez également utiliser le code transmis par votre entreprise.": "If an active code matches this email address, a recovery email has been requested. You can also use the code provided by your company."
 }

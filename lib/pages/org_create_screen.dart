@@ -232,7 +232,7 @@ class _OrgCreateScreenState extends State<OrgCreateScreen> {
     try {
       await OrgService(kAppId).requestActivationResend(email: email);
       _snack(
-        'Si l’envoi d’e-mails est configuré et qu’un code actif correspond à cette adresse, il vient d’être renvoyé. Le code reste aussi visible sur la page de confirmation Stripe.',
+        'Si un code actif correspond à cette adresse, un e-mail de récupération vient d’être demandé. Vous pouvez également utiliser le code transmis par votre entreprise.',
       );
     } catch (e) {
       _snack("Impossible d'envoyer la demande : $e");

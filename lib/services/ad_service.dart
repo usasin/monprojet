@@ -38,7 +38,9 @@ class AdService {
   static const _privacy = MethodChannel('prospecto/privacy');
   AdRequest get adRequest => AdRequest(
     nonPersonalizedAds:
-        defaultTargetPlatform == TargetPlatform.iOS && !_trackingAuthorized,
+        defaultTargetPlatform == TargetPlatform.iOS && !_trackingAuthorized
+        ? true
+        : null,
   );
 
   bool get canRequestAds => _canRequestAds;
