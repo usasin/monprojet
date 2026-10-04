@@ -64,7 +64,7 @@ La livraison complète Entreprise a remplacé la version GitHub 1.3.12+42. Le co
 - La connexion Apple a ensuite été rétablie. Cloud Shell affiche toujours « Site Unavailable / Unable to access this site » dans ce navigateur ; ne pas présenter le serveur d’achats comme déployé.
 
 
-## État de reprise — 4 octobre 2026, 10 h UTC
+## État de reprise — 4 octobre 2026, 10 h 08 UTC
 
 ### Builds contrôlés, sans répétition à l’identique
 
@@ -74,11 +74,11 @@ La livraison complète Entreprise a remplacé la version GitHub 1.3.12+42. Le co
 | 5 | `6ac1e2ac7394575b200ae315` | `7e7` | Arrêt rapide sur le nettoyage de la plateforme de test et un bouton hors écran. |
 | 6 | `6ac1e5027394575b200ae36b` | `e10743906c439644aa7e6cbe1e66c81f0961236c` | Tests ordinaires réussis ; capture native arrêtée sur les traductions non chargées. Aucune IPA 52. |
 | 7 | `6ac1ebc37394575b200ae497` | `290ffecf59c05da49af5cc9298349329937af8d9` | Échec après 32 min 4 s : quatrième capture cherchait EnterpriseWorkspace, masqué par la fiche prospect (`Bad state: No element`, ligne 84). Aucune IPA 52. |
-| 8 | `6ac21ffd7394575b200aef18` | `9efa8efd699359b4889089e339f20952d168bead` | En cours. Analyse et 101 tests réussis ; les quatre navigations iPhone/iPad sont testées avant compilation native. Captures et IPA pas encore confirmées. |
+| 8 | `6ac21ffd7394575b200aef18` | `9efa8efd699359b4889089e339f20952d168bead` | Annulé après 21 min 9 s, avant l’archive. Analyse et 101 tests réussis, dont les quatre navigations iPhone/iPad. Le contrôle visuel des artefacts du build 7 a révélé une première capture noire « Test starting… ». Attente du rendu natif et contrôle des pixels ajoutés avant relance. |
 
 Le parcours de capture est partagé entre les tests widgets rapides et l’intégration native. Le navigateur racine est conservé par une clé ; aucune recherche d’un écran masqué après ouverture de la fiche. Le code de capture reste isolé de la version de production.
 
-Quota observé pendant le build 8 : 86/500 minutes gratuites utilisées, avant décompte du build en cours ; solde courant 0 USD. Renouvellement le 1er novembre 2026. Ne pas relancer le build 8 tant que son résultat réel n’a pas été lu.
+Quota observé pendant le build 8 : 86/500 minutes gratuites utilisées, avant décompte du build en cours ; solde courant 0 USD. Renouvellement le 1er novembre 2026. Le build 8 a été annulé. Ne pas considérer ses tests réussis comme une validation des pixels natifs.
 
 ### Configuration Apple enregistrée
 
@@ -94,9 +94,16 @@ Quota observé pendant le build 8 : 86/500 minutes gratuites utilisées, avant d
 
 ### Blocages à lever avant soumission
 
-1. Attendre le résultat exact du build 8 ; vérifier dimensions et contenu des quatre captures natives par famille, puis remplacer les anciens visuels iPhone/iPad. Utiliser l’écran natif Accès Premium pour les captures de revue des abonnements.
+1. Lancer une compilation sur le correctif de rendu natif, puis attendre son résultat exact ; vérifier dimensions et contenu des quatre captures natives par famille, puis remplacer les anciens visuels iPhone/iPad. Utiliser l’écran natif Accès Premium pour les captures de revue des abonnements.
 2. Vérifier l’envoi Apple et le traitement du nouveau build ; sélectionner ce build dans la fiche 1.6.0.
 3. Firebase a été relu après reconnexion : 33 fonctions, pages 1 et 2 contrôlées. `getApplePurchaseAccount`, `verifyApplePurchase` et `appStoreNotifications` restent absentes. Le serveur des achats Apple n’est pas déployé. Cloud Shell embarqué est inaccessible dans ce navigateur. Une commande clone/pin du commit `9efa8efd699359b4889089e339f20952d168bead`, puis `deployer_achats_apple_cloud_shell.sh quiz-commercial`, a été fournie pour le Cloud Shell du téléphone. Ne pas répéter les quatre fonctions Entreprise déjà déployées.
 4. Relever l’URL réelle d’appStoreNotifications après déploiement, et configurer les notifications Apple V2 Production et Sandbox.
 5. Valider compte de revue, connexion, Map/Planning, achat Sandbox et restauration sur iPhone. Aucun essai réel sur appareil n’est confirmé.
 6. Ajouter les deux abonnements, leur groupe et la version à la même soumission de revue Apple, puis soumettre quand les points bloquants sont résolus. Aucun achat ou abonnement ne doit être présenté comme fonctionnel sur la seule base des tests unitaires.
+
+
+### Contrôle visuel natif et contrat payant
+
+- Artefacts du build 7 téléchargés et inspectés : trois PNG iPhone, 1320 × 2868. Le portefeuille et la fiche prospect affichent l’interface actuelle ; la vue Entreprise affiche encore la surface de démarrage du test. Ces fichiers ne doivent pas être téléversés ensemble dans Apple.
+- Le contrôle natif ajouté attend une seconde après le dessin, contrôle les pixels clairs de la fixture, et retente au maximum trois fois. Même nom de fichier conservé ; seules quatre images finales sont attendues. Vérification sur les artefacts réels : première image rejetée (0,5 % de pixels clairs), deux suivantes acceptées (98,1 %). Aucun fichier de démarrage ne doit être publié.
+- Business Apple vérifié : Free Apps Agreement Active (27 août 2026–27 août 2027), conformité DSA Active, **Paid Apps Agreement New**. Apple demande la mise à jour de l’entité légale avant signature. Le contrat payant n’a pas été signé. L’utilisateur doit valider lui-même ses informations et la signature avant commercialisation des abonnements.
