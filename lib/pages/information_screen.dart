@@ -12,10 +12,12 @@ class InformationScreen extends StatelessWidget {
   static const routeName = '/information';
   const InformationScreen({super.key});
 
-  static final Uri _privacy =
-      Uri.parse('https://digitalsolutionsai.com/confidentialite/');
-  static final Uri _terms =
-      Uri.parse('https://digitalsolutionsai.com/conditions/');
+  static final Uri _privacy = Uri.parse(
+    'https://github.com/usasin/monprojet/blob/main/docs/PRIVACY.md',
+  );
+  static final Uri _terms = Uri.parse(
+    'https://digitalsolutionsai.com/conditions/',
+  );
   static final Uri _website = Uri.parse('https://digitalsolutionsai.com/');
   static final Uri _contact = Uri(
     scheme: 'mailto',
@@ -143,7 +145,7 @@ class InformationScreen extends StatelessWidget {
                         icon: Icons.cloud_outlined,
                         title: 'Services techniques',
                         body:
-                            'Prospecto utilise des services techniques nécessaires au fonctionnement de l’application : Firebase/Google pour l’authentification, les données et certaines fonctions serveur ; Google Play pour les achats intégrés ; Google AdMob pour la publicité de la version gratuite ; OpenStreetMap/Nominatim/Overpass pour la recherche géographique ; et Stripe pour certaines offres Entreprise lorsque ce parcours est utilisé.',
+                            'Prospecto utilise Firebase/Google pour l’authentification, les données, les fonctions serveur et les notifications ; Apple pour les achats intégrés iOS, Google Play pour les achats Android ; Google AdMob pour la publicité de la version gratuite ; OpenStreetMap/Nominatim/Overpass pour la recherche géographique ; et Stripe pour certains parcours Entreprise. Les droits d’achat sont validés côté serveur. La politique de confidentialité détaille ces traitements et les informations qui peuvent subsister après la suppression d’un compte.',
                       ),
                       const SizedBox(height: 14),
                       const _InfoSection(
@@ -193,12 +195,16 @@ class InformationScreen extends StatelessWidget {
                                 FilledButton.icon(
                                   onPressed: () => _open(_privacy),
                                   icon: const Icon(Icons.privacy_tip_outlined),
-                                  label: const LText('Politique de confidentialité'),
+                                  label: const LText(
+                                    'Politique de confidentialité',
+                                  ),
                                 ),
                                 OutlinedButton.icon(
                                   onPressed: () => _open(_terms),
                                   icon: const Icon(Icons.description_outlined),
-                                  label: const LText('Conditions d’utilisation'),
+                                  label: const LText(
+                                    'Conditions d’utilisation',
+                                  ),
                                 ),
                                 OutlinedButton.icon(
                                   onPressed: () => _open(_website),

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import 'ad_config.dart';
 import 'usage_meter.dart';
@@ -31,6 +33,15 @@ class AdService {
   bool _initialized = false;
   bool _canRequestAds = false;
   bool _showingFullScreen = false;
+  bool _trackingResolved = false;
+  bool _trackingAuthorized = false;
+  static const _privacy = MethodChannel('prospecto/privacy');
+  AdRequest get adRequest => AdRequest(
+    nonPersonalizedAds:
+        defaultTargetPlatform == TargetPlatform.iOS && !_trackingAuthorized
+        ? true
+        : null,
+  );
 
   bool get canRequestAds => _canRequestAds;
 
@@ -38,6 +49,24 @@ class AdService {
     if (!AdConfig.canUseAds) return;
     if (_initialized) return;
     _initialized = true;
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      try {
+        final status = await _privacy.invokeMethod<String>('requestTracking');
+        _trackingAuthorized = status == 'authorized';
+        _trackingResolved =
+            status == 'authorized' ||
+            status == 'denied' ||
+            status == 'restricted';
+      } catch (_) {
+        _initialized = false;
+        return;
+      }
+      if (!_trackingResolved) {
+        _initialized = false;
+        return;
+      }
+    }
 
     final completer = Completer<void>();
     final parameters = ConsentRequestParameters();
@@ -61,6 +90,8 @@ class AdService {
   }
 
   Future<void> _finishInitialization() async {
+    if (defaultTargetPlatform == TargetPlatform.iOS && !_trackingResolved)
+      return;
     _canRequestAds = await ConsentInformation.instance.canRequestAds();
     if (!_canRequestAds) return;
     await MobileAds.instance.initialize();
@@ -70,6 +101,10 @@ class AdService {
 
   Future<void> showPrivacyOptions() async {
     if (!AdConfig.canUseAds) return;
+    if (defaultTargetPlatform == TargetPlatform.iOS && !_trackingResolved) {
+      await initialize();
+      if (!_trackingResolved) return;
+    }
     await ConsentForm.showPrivacyOptionsForm((_) {});
     _canRequestAds = await ConsentInformation.instance.canRequestAds();
     if (_canRequestAds) {
@@ -152,7 +187,7 @@ class AdService {
     }
     InterstitialAd.load(
       adUnitId: AdConfig.interstitial,
-      request: const AdRequest(),
+      request: adRequest,
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) => _interstitial = ad,
         onAdFailedToLoad: (_) => _interstitial = null,

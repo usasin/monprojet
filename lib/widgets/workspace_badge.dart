@@ -13,9 +13,10 @@ import 'company_avatar.dart';
 import 'account_avatar.dart';
 
 class WorkspaceBadge extends StatelessWidget {
-  const WorkspaceBadge({super.key, this.compact = false});
+  const WorkspaceBadge({super.key, this.compact = false, this.auth});
 
   final bool compact;
+  final FirebaseAuth? auth;
 
   static String _identityLabel(User? user) {
     if (user == null) return 'Non connecté';
@@ -33,7 +34,7 @@ class WorkspaceBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final org = context.watch<OrgProvider>();
-    final user = FirebaseAuth.instance.currentUser;
+    final user = (auth ?? FirebaseAuth.instance).currentUser;
     final color = org.isTeam ? ProspectoColors.green : ProspectoColors.blue;
     final identity = _identityLabel(user);
     final workspaceTitle = org.isTeam
@@ -111,7 +112,7 @@ class WorkspaceBadge extends StatelessWidget {
 
   Future<void> _showWorkspacePicker(BuildContext context) async {
     final org = context.read<OrgProvider>();
-    final identity = _identityLabel(FirebaseAuth.instance.currentUser);
+    final identity = _identityLabel((auth ?? FirebaseAuth.instance).currentUser);
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,

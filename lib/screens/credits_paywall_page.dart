@@ -2,6 +2,9 @@ import 'package:easy_localization/easy_localization.dart';
 import '../widgets/localized_text.dart';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../services/access_control.dart';
 
 import '../services/ad_service.dart';
 import '../services/in_app_purchase_service.dart';
@@ -27,6 +30,9 @@ class CreditsPaywallPage extends StatefulWidget {
 }
 
 class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
+  bool get _apple =>
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS;
   final _meter = UsageMeter();
   late final InAppPurchaseService _iap;
 
@@ -56,20 +62,26 @@ class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
   }
 
   Future<void> _boot() async {
-    await _meter.initIfNeeded();
-    await _meter.syncFromCloud();
-    await _iap.init();
-
-    // Restore silencieux pour resync premium à l'ouverture
     try {
-      await _iap.restore();
-    } catch (_) {}
-
-    await _refresh();
-    await _loadProductsWithRetry();
-
-    if (!mounted) return;
-    setState(() => _loading = false);
+      await _meter.initIfNeeded();
+      await _meter.syncFromCloud();
+      await _iap.init();
+      // Restore silencieux pour resync premium à l'ouverture.
+      try {
+        await _iap.restore();
+      } catch (_) {}
+      await _refresh();
+      if (mounted) await _loadProductsWithRetry();
+    } catch (_) {
+      _productsError =
+          'Les abonnements sont temporairement indisponibles. Réessayez plus tard.';
+    } finally {
+      if (mounted)
+        setState(() {
+          _loading = false;
+          _loadingProducts = false;
+        });
+    }
   }
 
   Future<void> _refresh() async {
@@ -89,10 +101,12 @@ class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
     try {
       final ok = await _iap.loadProducts();
       if (!ok) {
-        _productsError = "Produits indisponibles. Vérifie ta config Play Console.";
+        _productsError =
+            "Les abonnements sont temporairement indisponibles. Réessayez plus tard.";
       }
-    } catch (e) {
-      _productsError = "Erreur produits : $e";
+    } catch (_) {
+      _productsError =
+          'Les abonnements sont temporairement indisponibles. Réessayez plus tard.';
     }
 
     if (!mounted) return;
@@ -106,30 +120,52 @@ class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
     if (mounted &&
         res.message != null &&
         (_restoreRequestedByUser || p.status == PurchaseStatus.purchased)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: LText(res.message!)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: LText(res.message!)));
     }
     return res.delivered || res.ignored;
   }
 
   Future<void> _buy(ProductDetails product) async {
+    if (!await AccessControl.requireLogin(
+      context,
+      reason: 'Connectez-vous pour conserver votre abonnement.',
+    ))
+      return;
+    if (!mounted) return;
     setState(() => _isPurchasing = true);
     try {
       await _iap.buy(product);
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: LText('L’achat n’a pas pu démarrer. Réessayez.'),
+          ),
+        );
     } finally {
       if (mounted) setState(() => _isPurchasing = false);
     }
   }
 
   Future<void> _restore() async {
+    if (!await AccessControl.requireLogin(
+      context,
+      reason: 'Connectez-vous pour restaurer votre abonnement.',
+    ))
+      return;
+    if (!mounted) return;
     setState(() => _restoreRequestedByUser = true);
     try {
       await _iap.restore();
       await _refresh();
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: LText("Restauration impossible : $e")),
+        const SnackBar(
+          content: LText('Restauration indisponible. Réessayez plus tard.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _restoreRequestedByUser = false);
@@ -168,36 +204,51 @@ class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       LText(
-                        _isPremium ? "Premium activé ✅" : "Débloque toutes les fonctionnalités",
+                        _isPremium
+                            ? "Premium activé ✅"
+                            : "Débloque toutes les fonctionnalités",
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
-                      const LText("Gratuit : 1 tournée enregistrée • jusqu’à 3 clients"),
+                      const LText(
+                        "Gratuit : 1 tournée enregistrée • jusqu’à 3 clients",
+                      ),
                       const SizedBox(height: 6),
-                      const LText("Premium : illimité • optimisation • historique • sans pub"),
+                      const LText(
+                        "Premium : illimité • optimisation • historique • sans pub",
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 16),
 
-                if (_loadingProducts) const Center(child: CircularProgressIndicator()),
+                if (_loadingProducts)
+                  const Center(child: CircularProgressIndicator()),
                 if (_productsError != null)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: LText(_productsError!, style: TextStyle(color: cs.error)),
+                    child: LText(
+                      _productsError!,
+                      style: TextStyle(color: cs.error),
+                    ),
                   ),
 
-                if (!_isPremium && !_loadingProducts && pMonthly == null && pYearly == null)
+                if (!_isPremium &&
+                    !_loadingProducts &&
+                    pMonthly == null &&
+                    pYearly == null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+                        color: cs.surfaceContainerHighest.withValues(
+                          alpha: 0.35,
+                        ),
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const LText(
-                        "Les offres ne s'affichent pas ?\n\nPour tester les achats, installe l'app depuis le Play Store (Test interne). En mode debug (flutter run), Google Play Billing peut renvoyer 0 produit.",
+                      child: LText(
+                        'Les offres sont temporairement indisponibles. Réessayez dans quelques instants.',
                       ),
                     ),
                   ),
@@ -219,8 +270,29 @@ class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
 
                 const SizedBox(height: 16),
                 LText(
-                  "Résiliable à tout moment depuis le Play Store. L’abonnement se renouvelle automatiquement sauf annulation.",
+                  _apple
+                      ? 'Abonnement mensuel ou annuel avec renouvellement automatique. Le paiement est débité de votre compte Apple. Gérez ou annulez l’abonnement dans les réglages de votre compte Apple avant la fin de la période en cours.'
+                      : 'Résiliable à tout moment depuis Google Play. L’abonnement se renouvelle automatiquement sauf annulation.',
                   style: Theme.of(context).textTheme.bodySmall,
+                ),
+                Wrap(
+                  children: [
+                    if (_apple)
+                      TextButton(
+                        onPressed: () => launchUrl(
+                          Uri.parse(
+                            'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
+                          ),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                        child: const LText('Conditions d’utilisation'),
+                      ),
+                    TextButton(
+                      onPressed: () =>
+                          Navigator.pushNamed(context, '/information'),
+                      child: const LText('Confidentialité'),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -258,16 +330,24 @@ class _PlanTile extends StatelessWidget {
             width: highlight ? 2 : 1,
             color: highlight ? ProspectoColors.green : cs.outline,
           ),
-          color: highlight ? ProspectoColors.green.withValues(alpha: 0.08) : cs.surface,
+          color: highlight
+              ? ProspectoColors.green.withValues(alpha: 0.08)
+              : cs.surface,
         ),
         child: Row(
           children: [
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                LText(title, style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
-                LText(subtitle, style: Theme.of(context).textTheme.bodyMedium),
-              ]),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LText(title, style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 4),
+                  LText(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
             ),
             Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
           ],

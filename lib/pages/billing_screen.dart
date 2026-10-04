@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -11,6 +12,7 @@ import '../config.dart';
 import '../services/developer_access_service.dart';
 import '../screens/credits_paywall_page.dart';
 import 'developer_console_screen.dart';
+import 'enterprise_access_screen.dart';
 import '../theme/prospecto_colors.dart';
 import '../widgets/brand_background.dart';
 
@@ -24,6 +26,7 @@ class BillingScreen extends StatefulWidget {
 }
 
 class _BillingScreenState extends State<BillingScreen> {
+  bool get _apple => !kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS);
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
@@ -84,7 +87,7 @@ class _BillingScreenState extends State<BillingScreen> {
   @override
   void initState() {
     super.initState();
-    _loadDeveloperStatus();
+    if (!_apple) _loadDeveloperStatus();
   }
 
   Future<void> _loadDeveloperStatus() async {
@@ -112,6 +115,7 @@ class _BillingScreenState extends State<BillingScreen> {
   }
 
   Future<void> _openEnterprisePlan(_EnterprisePlan plan) async {
+    if (_apple) return;
     if (_openingPlan != null) return;
     if (_isDeveloper) {
       await Navigator.of(context).pushNamed(
@@ -261,6 +265,19 @@ class _BillingScreenState extends State<BillingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_apple) {
+      return BrandBackground(
+        animate: false,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(title: const LText('Abonnements')),
+          body: SafeArea(child: AppleBillingContent(
+            onOpenPremium: _openPersonalPremium,
+            onEnterpriseAccess: () => Navigator.of(context).pushNamed(EnterpriseAccessScreen.routeName),
+          )),
+        ),
+      );
+    }
     final dark = Theme.of(context).brightness == Brightness.dark;
     return BrandBackground(
       gradientColors: const [
@@ -473,6 +490,48 @@ class _BillingScreenState extends State<BillingScreen> {
       ),
     );
   }
+}
+
+/// Apple purchases use StoreKit; organizations can activate an existing workspace.
+class AppleBillingContent extends StatelessWidget {
+  const AppleBillingContent({super.key, required this.onOpenPremium, required this.onEnterpriseAccess});
+  final VoidCallback onOpenPremium;
+  final VoidCallback onEnterpriseAccess;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(16),
+    children: [
+      _GlassPanel(child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Icon(Icons.workspace_premium_rounded, color: ProspectoColors.blue, size: 36),
+          const SizedBox(height: 12),
+          const LText('Premium personnel', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          const LText('Tournées et prospects illimités, optimisation et utilisation sans publicité.'),
+          const SizedBox(height: 8),
+          const LText('Les offres mensuelles et annuelles sont disponibles dans l’App Store. Consultez leur prix avant de confirmer votre abonnement.'),
+          const SizedBox(height: 16),
+          FilledButton.icon(onPressed: onOpenPremium, icon: const Icon(Icons.person_outline), label: const LText('Voir les offres Premium')),
+        ],
+      )),
+      const SizedBox(height: 16),
+      _GlassPanel(child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const LText('Votre espace d’équipe', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          const LText('Accédez à l’espace mis à disposition par votre entreprise avec le code transmis par votre administrateur.'),
+          const SizedBox(height: 12),
+          for (final feature in _BillingScreenState._commonEnterpriseFeatures)
+            _FeatureLine(feature: feature, color: ProspectoColors.green),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(onPressed: onEnterpriseAccess, icon: const Icon(Icons.vpn_key_outlined), label: const LText('J’ai un code d’entreprise')),
+        ],
+      )),
+    ],
+  );
 }
 
 class _TitleIcon extends StatelessWidget {

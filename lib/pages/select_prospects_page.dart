@@ -268,7 +268,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
     }
     _bannerAd = BannerAd(
       adUnitId: AdConfig.bannerHome,
-      request: const AdRequest(),
+      request: AdService.instance.adRequest,
       size: AdSize.banner,
       listener: BannerAdListener(
         onAdLoaded: (_) {
