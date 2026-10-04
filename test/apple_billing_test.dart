@@ -32,15 +32,19 @@ void main() {
     'iOS billing displays StoreKit and existing company access without external checkout',
     (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      addTearDown(() => debugDefaultTargetPlatformOverride = null);
-      await tester.pumpWidget(localized(const BillingScreen()));
-      await tester.pumpAndSettle();
-      expect(find.text('Voir les offres Premium'), findsOneWidget);
-      expect(find.text('J’ai un code d’entreprise'), findsOneWidget);
-      expect(find.textContaining('Stripe'), findsNothing);
-      expect(find.textContaining('Google Play'), findsNothing);
-      expect(find.text('Choisir cette offre'), findsNothing);
-      expect(tester.takeException(), isNull);
+      try {
+        await tester.pumpWidget(localized(const BillingScreen()));
+        await tester.pumpAndSettle();
+        expect(find.text('Voir les offres Premium'), findsOneWidget);
+        expect(find.text('J’ai un code d’entreprise'), findsOneWidget);
+        expect(find.textContaining('Stripe'), findsNothing);
+        expect(find.textContaining('Google Play'), findsNothing);
+        expect(find.text('Choisir cette offre'), findsNothing);
+        expect(tester.takeException(), isNull);
+      } finally {
+        // Flutter checks debug globals before package:test tearDown callbacks.
+        debugDefaultTargetPlatformOverride = null;
+      }
     },
   );
   testWidgets(
@@ -62,6 +66,7 @@ void main() {
       expect(premium, 1);
       expect(company, 0);
       await tester.ensureVisible(find.text('J’ai un code d’entreprise'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('J’ai un code d’entreprise'));
       expect(company, 1);
       expect(tester.takeException(), isNull);
