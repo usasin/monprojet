@@ -33,8 +33,8 @@ def capture(family, candidates, accepted_sizes, runtime, types):
             '--target=integration_test/appstore_screenshots_test.dart', '-d', udid,
             env={**os.environ, 'PROSPECTO_SCREENSHOT_DIR': str(output.resolve())})
         images = list(output.glob('*.png'))
-        if len(images) != 3:
-            raise RuntimeError(f'Expected three {family} captures, got {len(images)}')
+        if len(images) != 4:
+            raise RuntimeError(f'Expected four {family} captures, got {len(images)}')
         for image in images:
             data = image.read_bytes()
             if data[:8] != b'\x89PNG\r\n\x1a\n':
