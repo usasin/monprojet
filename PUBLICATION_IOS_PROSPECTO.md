@@ -48,12 +48,12 @@ La livraison complète Entreprise a remplacé la version GitHub 1.3.12+42. Le co
 
 - Validation séparée des achats Apple et Google Play ; transactions Apple signées vérifiées avec la bibliothèque officielle Apple 3.1.0 et la racine publique Apple Root CA G3, contrôles OCSP activés. Liaison de l'achat au compte Prospecto par un UUID opaque ; expiration, remboursement et notifications serveur traités côté Firebase. Aucun droit Premium accordé à partir d'un décodage JWS non vérifié.
 - Demande App Tracking Transparency native avant l'initialisation publicitaire iOS ; demandes non personnalisées quand l'autorisation est refusée. Cible minimale iOS 15 pour StoreKit 2.
-- Captures automatiques des vrais écrans Entreprise, Portefeuille et Fiche prospect sur simulateurs iPhone Pro Max et iPad 13 pouces, avec données de démonstration isolées. Les dimensions sont contrôlées ; aucune capture Android n'est transformée en capture iPad. Ces captures sont préparées, pas encore produites.
+- Captures automatiques des vrais écrans Entreprise, Portefeuille, Fiche prospect et Accès Premium sur simulateurs iPhone Pro Max et iPad 13 pouces, avec données de démonstration isolées. Les dimensions sont contrôlées ; aucune capture Android n'est transformée en capture iPad. Ces captures sont préparées, pas encore produites.
 - Vérifications locales réussies : compilation TypeScript, 16 tests Apple + 9 tests commerciaux, précontrôle iOS, syntaxe Python et shell. Les tests Flutter, les captures natives et la compilation iOS de ces corrections restent à exécuter dans Codemagic. Ne pas déclarer le build 52 envoyé ou validé avant le résultat réel.
 - Déployer uniquement le nouveau backend d'achats avec `bash deployer_achats_apple_cloud_shell.sh quiz-commercial` depuis une session Google autorisée, puis relever l'URL HTTPS réelle d'`appStoreNotifications` et la configurer pour les notifications Apple V2 Production et Sandbox. Ce nouveau déploiement n'est pas confirmé. Le déploiement Entreprise du build 51 reste acquis.
-- La page Subscriptions observée le 3 octobre ne contenait aucun produit Apple. Créer et vérifier le groupe Premium, les produits `premium_monthly` et `premium_yearly`, leurs durées, métadonnées et prix convenus avant les essais Sandbox. Références tarifaires retrouvées : 3,99 €/mois et 29,99 €/an ; ne pas affirmer leur activation dans App Store Connect avant vérification.
+- Groupe Apple Premium et deux produits créés le 4 octobre : voir l’état actuel ci-dessous. Leur création ne prouve pas le fonctionnement des achats sur appareil.
 - Garder le build 51 sur la fiche tant qu'un nouveau build contrôlé n'a pas été envoyé. Remplacer ensuite les anciennes captures iPhone/iPad, vérifier compte de démonstration, confidentialité et parcours Map/Planning, et soumettre explicitement à App Review.
-- Reprise du 4 octobre : les sessions du navigateur précédent ne sont plus présentes. Reconnexion Codemagic nécessaire ; App Store Connect redirige vers une page de connexion vide avec `authResult=FAILED`. Ne pas répéter les builds ni recréer les certificats pour résoudre une déconnexion.
+- Lors des reprises, les connexions Apple et Google peuvent expirer. Les reconnexions du 4 octobre sont confirmées. Une déconnexion ne nécessite aucun nouveau certificat ni build.
 
 ### Contrôle Codemagic du 4 octobre
 
@@ -61,4 +61,42 @@ La livraison complète Entreprise a remplacé la version GitHub 1.3.12+42. Le co
 - Build `6ac1de447394575b200ae26e`, commit `e9149263d448602fec570741499c47d4b601c28c` : précontrôle natif, résolution Apple/signature, installation des dépendances et analyse Dart réussis. 96 tests Flutter réussis, un test échoué ; arrêt avant les captures et l'archive, après 3 min 38 s. Aucune IPA 52 envoyée.
 - Le test en échec exigeait une chaîne de code exacte dans WorkspaceBadge. Il a été remplacé par un test du rendu réel de l'e-mail et du rôle avec un compte de démonstration, compatible avec l'injection utilisée pour les captures.
 - Autre correction avant relance : sur iOS, l'écran Abonnements dirige les achats personnels vers StoreKit et propose uniquement l'accès à l'espace d'entreprise existant par code ; les prix, liens et boutons de paiement Stripe ne sont plus affichés sur iOS. Les offres Entreprise Android restent disponibles. Deux tests vérifient l'affichage iOS et les actions. Référence de la revue : https://developer.apple.com/app-store/review/guidelines/ , sections 3.1.3 et 3.1.3(c).
-- App Store Connect affiche toujours une connexion vide ; Cloud Shell affiche « Site Unavailable / Unable to access this site » dans ce navigateur. Le déploiement du nouveau backend et la configuration Apple ne sont pas confirmés.
+- La connexion Apple a ensuite été rétablie. Cloud Shell affiche toujours « Site Unavailable / Unable to access this site » dans ce navigateur ; ne pas présenter le serveur d’achats comme déployé.
+
+
+## État de reprise — 4 octobre 2026, 10 h UTC
+
+### Builds contrôlés, sans répétition à l’identique
+
+| Index | Build Codemagic | Commit | Résultat constaté |
+| --- | --- | --- | --- |
+| 4 | `6ac1e1007394575b200ae2d4` | `17db` | Arrêt rapide sur le chargement asynchrone des traductions dans les tests widgets. |
+| 5 | `6ac1e2ac7394575b200ae315` | `7e7` | Arrêt rapide sur le nettoyage de la plateforme de test et un bouton hors écran. |
+| 6 | `6ac1e5027394575b200ae36b` | `e10743906c439644aa7e6cbe1e66c81f0961236c` | Tests ordinaires réussis ; capture native arrêtée sur les traductions non chargées. Aucune IPA 52. |
+| 7 | `6ac1ebc37394575b200ae497` | `290ffecf59c05da49af5cc9298349329937af8d9` | Échec après 32 min 4 s : quatrième capture cherchait EnterpriseWorkspace, masqué par la fiche prospect (`Bad state: No element`, ligne 84). Aucune IPA 52. |
+| 8 | `6ac21ffd7394575b200aef18` | `9efa8efd699359b4889089e339f20952d168bead` | En cours. Analyse et 101 tests réussis ; les quatre navigations iPhone/iPad sont testées avant compilation native. Captures et IPA pas encore confirmées. |
+
+Le parcours de capture est partagé entre les tests widgets rapides et l’intégration native. Le navigateur racine est conservé par une clé ; aucune recherche d’un écran masqué après ouverture de la fiche. Le code de capture reste isolé de la version de production.
+
+Quota observé pendant le build 8 : 86/500 minutes gratuites utilisées, avant décompte du build en cours ; solde courant 0 USD. Renouvellement le 1er novembre 2026. Ne pas relancer le build 8 tant que son résultat réel n’a pas été lu.
+
+### Configuration Apple enregistrée
+
+- Groupe **Prospecto Premium**, identifiant `22438689`, français et anglais (États-Unis). Les deux abonnements sont au même niveau de service **1**.
+- Mensuel : produit `premium_monthly`, Apple ID `6818945571`, durée un mois, prix de base France 3,99 €.
+- Annuel : produit `premium_yearly`, Apple ID `6818946151`, durée un an payé en une fois, prix de base France 29,99 €. L’option d’engagement annuel payé mensuellement n’a pas été activée.
+- Disponibilité dans 175 pays/régions actuels, prix locaux automatiques ; familles désactivées, achats multisièges non autorisés, achats App Store uniquement.
+- Noms et descriptions FR/EN enregistrés. Notes de revue mensuelles enregistrées lors de la session précédente ; notes annuelles enregistrées pendant cette reprise. Captures de revue encore à ajouter ; produits et groupe non soumis.
+- Fiche iOS 1.6.0 : build 51 conservé jusqu’à disponibilité vérifiée de la nouvelle IPA. État Prepare for Submission ; ancienne revue rejetée pour le build 23. Aucune nouvelle soumission.
+- Confidentialité : 15 types de données complétés et publiés. URL Apple enregistrée : `https://github.com/usasin/monprojet/blob/main/docs/PRIVACY.md`. La politique à jour est publiée sur main par le commit de documentation `ee74bd1eda16f7aedbef60c96b126f8eb50883b4` ; l’ancienne page Drive n’a pas pu être remplacée, son accès en écriture étant refusé.
+- Assistance `https://digitalsolutionsai.com/contact/`, marketing `https://digitalsolutionsai.com/applications/prospecto/`, copyright 2026 Digital Solutions AI ; description Solo/Entreprise et explications commerciales/ATT enregistrées.
+- Streamlined Purchasing reste activé. Edit ne présente pas de dialogue dans le navigateur. Apple exige que le dernier binaire approuvé contienne les APIs StoreKit nécessaires avant désactivation (documentation officielle : `https://developer.apple.com/help/app-store-connect/manage-subscriptions/manage-streamlined-purchasing`). Aucun achat promu, code promotionnel ou offre de retour n’a été configuré pendant cette préparation ; ne pas activer ces parcours sans prendre en charge les achats commencés hors application et leur liaison au compte.
+
+### Blocages à lever avant soumission
+
+1. Attendre le résultat exact du build 8 ; vérifier dimensions et contenu des quatre captures natives par famille, puis remplacer les anciens visuels iPhone/iPad. Utiliser l’écran natif Accès Premium pour les captures de revue des abonnements.
+2. Vérifier l’envoi Apple et le traitement du nouveau build ; sélectionner ce build dans la fiche 1.6.0.
+3. Firebase a été relu après reconnexion : 33 fonctions, pages 1 et 2 contrôlées. `getApplePurchaseAccount`, `verifyApplePurchase` et `appStoreNotifications` restent absentes. Le serveur des achats Apple n’est pas déployé. Cloud Shell embarqué est inaccessible dans ce navigateur. Une commande clone/pin du commit `9efa8efd699359b4889089e339f20952d168bead`, puis `deployer_achats_apple_cloud_shell.sh quiz-commercial`, a été fournie pour le Cloud Shell du téléphone. Ne pas répéter les quatre fonctions Entreprise déjà déployées.
+4. Relever l’URL réelle d’appStoreNotifications après déploiement, et configurer les notifications Apple V2 Production et Sandbox.
+5. Valider compte de revue, connexion, Map/Planning, achat Sandbox et restauration sur iPhone. Aucun essai réel sur appareil n’est confirmé.
+6. Ajouter les deux abonnements, leur groupe et la version à la même soumission de revue Apple, puis soumettre quand les points bloquants sont résolus. Aucun achat ou abonnement ne doit être présenté comme fonctionnel sur la seule base des tests unitaires.
