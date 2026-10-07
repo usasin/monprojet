@@ -25,7 +25,13 @@ git apply --reverse --check --unidiff-zero docs/apple-review-2026-10-07/enable-e
 
 The existing native source preflight now verifies the entitlement file and all three Runner references. The existing IPA verifier also checks the actual signed application's Apple entitlement and its provisioning profile, so a missing native entitlement cannot produce another green archive. This does not change the workflow or regenerate signing assets.
 
-Before any new build: verify that the Apple provider is enabled in the existing Firebase project; no Firebase configuration was changed here. After the next authorized native build, test real Apple login, privacy relay, StoreKit catalogue/purchase/restore in Sandbox on iPhone and iPad. Flutter tests do not establish native Sandbox success.
+The Apple provider was verified enabled in the existing `quiz-commercial` Firebase project on 7 October. No Firebase configuration was changed here. After the next authorized native build, test real Apple login, privacy relay, StoreKit catalogue/purchase/restore in Sandbox on iPhone and iPad. Flutter tests do not establish native Sandbox success.
+
+## Next native build and review
+
+Use this correction branch with the existing `prospecto-ios` workflow, retaining its dependency caches and signing assets. The existing script selects the next unused App Store build number automatically. Verify the archive with the strengthened signed-IPA check before uploading it, then test Apple login and subscription catalogue/purchase/restore on iPhone and iPad.
+
+The monthly and annual products and Premium group are in the existing App Store Connect review draft, all marked Ready for Review, with review metadata and screenshots. They have not been submitted. Add the corrected app version to the same submission after native validation; do not resubmit the rejected build 52. Complete the account's outstanding paid-agreement requirements before relying on the live store catalogue or proceeding to review.
 
 The original workflow, signing assets, app version, Bundle ID and Firebase project remain unchanged. No new Codemagic build has been launched and the rejected binary has not been resubmitted. The existing build-number script automatically selects a number higher than the latest uploaded build; no manual version or workflow change is needed.
 
