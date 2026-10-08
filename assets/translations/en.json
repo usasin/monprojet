@@ -796,5 +796,10 @@
   "L’achat n’a pas pu démarrer. Réessayez.": "The purchase could not start. Please try again.",
   "Restauration indisponible. Réessayez plus tard.": "Restore is unavailable. Please try again later.",
   "Abonnement mensuel ou annuel avec renouvellement automatique. Le paiement est débité de votre compte Apple. Gérez ou annulez l’abonnement dans les réglages de votre compte Apple avant la fin de la période en cours.": "Monthly or annual auto-renewing subscription. Payment is charged to your Apple account. Manage or cancel your subscription in your Apple account settings before the end of the current period.",
-  "Si un code actif correspond à cette adresse, un e-mail de récupération vient d’être demandé. Vous pouvez également utiliser le code transmis par votre entreprise.": "If an active code matches this email address, a recovery email has been requested. You can also use the code provided by your company."
+  "Si un code actif correspond à cette adresse, un e-mail de récupération vient d’être demandé. Vous pouvez également utiliser le code transmis par votre entreprise.": "If an active code matches this email address, a recovery email has been requested. You can also use the code provided by your company.",
+  "Se connecter avec Apple": "Sign in with Apple",
+  "Chargement du prix…": "Loading price…",
+  "Offre indisponible": "Offer unavailable",
+  "La connexion Apple n’a pas abouti. Réessayez.": "Apple sign-in did not complete. Please try again.",
+  "Connecte-toi pour continuer (Apple, Google ou email).": "Sign in to continue (Apple, Google or email)."
 }

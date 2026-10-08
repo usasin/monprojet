@@ -28,5 +28,10 @@ with tempfile.TemporaryDirectory() as directory:
     ]))
     assert profile['Entitlements']['application-identifier'] == 'G6T4NT9XZ9.com.ainego.aiProspectGps'
     assert profile['Name'] == 'Prospecto App Store shared cert 2026'
+    assert profile['Entitlements'].get('com.apple.developer.applesignin') == ['Default'], 'Profile does not authorize Apple login'
+    signed_entitlements = plistlib.loads(subprocess.check_output([
+        'codesign', '--display', '--entitlements', '-', '--xml', str(app)
+    ], stderr=subprocess.PIPE))
+    assert signed_entitlements.get('com.apple.developer.applesignin') == ['Default'], 'Signed app is missing Apple login entitlement'
     subprocess.run(['codesign', '--verify', '--deep', '--strict', '--verbose=2', str(app)], check=True)
-print('Signed Prospecto IPA verified: Firebase included, Apple SDK 26+, correct app/profile/version')
+print('Signed Prospecto IPA verified: Apple login entitlement, Firebase included, Apple SDK 26+, correct app/profile/version')

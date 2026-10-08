@@ -16,6 +16,9 @@ assert firebase['REVERSED_CLIENT_ID'] in info['CFBundleURLTypes'][0]['CFBundleUR
 assert project.count('GoogleService-Info.plist in Resources') >= 2
 assert 'PRODUCT_BUNDLE_IDENTIFIER = com.ainego.aiProspectGps;' in project
 assert len(info['UISupportedInterfaceOrientations~ipad']) == 4
+entitlements = plistlib.loads((root / 'ios/Runner/Runner.entitlements').read_bytes())
+assert entitlements.get('com.apple.developer.applesignin') == ['Default'], 'Apple login entitlement missing'
+assert project.count('CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;') == 3, 'All three Runner configurations must include Apple login entitlements'
 assert info['ITSAppUsesNonExemptEncryption'] is False
 assert 'NSPhotoLibraryUsageDescription' in info
 assert 'NSCameraUsageDescription' in info

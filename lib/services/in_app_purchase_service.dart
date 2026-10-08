@@ -15,6 +15,7 @@ class InAppPurchaseService {
 
   final Map<String, ProductDetails> _products = {};
   bool _available = false;
+  bool _disposed = false;
 
   bool get isAvailable => _available;
 
@@ -28,10 +29,9 @@ class InAppPurchaseService {
   InAppPurchaseService({required this.onDeliverPurchase});
 
   Future<void> init() async {
-    _available = await _iap.isAvailable();
-    if (!_available) return;
-
-    _sub?.cancel();
+    // Listen before querying the store so a temporary catalogue failure does
+    // not lose purchase/restoration events when the user retries.
+    if (_disposed || _sub != null) return;
     _sub = _iap.purchaseStream.listen((purchases) async {
       for (final p in purchases) {
         await _handlePurchase(p);
@@ -40,28 +40,33 @@ class InAppPurchaseService {
   }
 
   void dispose() {
+    _disposed = true;
     _sub?.cancel();
     _sub = null;
   }
 
   Future<bool> loadProducts({
     Duration timeout = const Duration(seconds: 25),
+    Duration availabilityTimeout = const Duration(seconds: 10),
   }) async {
+    if (_disposed) return false;
+    await init();
     if (!_available) {
-      _available = await _iap.isAvailable();
+      _available = await _iap.isAvailable().timeout(availabilityTimeout);
       if (!_available) return false;
     }
 
     final ids = <String>{premiumMonthly, premiumYearly};
 
     final resp = await _iap.queryProductDetails(ids).timeout(timeout);
+    if (_disposed) return false;
 
     _products.clear();
     for (final p in resp.productDetails) {
-      _products[p.id] = p;
+      if (ids.contains(p.id)) _products[p.id] = p;
     }
 
-    return resp.notFoundIDs.isEmpty || _products.isNotEmpty;
+    return _products.isNotEmpty;
   }
 
   Future<void> buy(ProductDetails product) async {

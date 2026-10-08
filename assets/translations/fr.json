@@ -823,5 +823,10 @@
   "L’achat n’a pas pu démarrer. Réessayez.": "L’achat n’a pas pu démarrer. Réessayez.",
   "Restauration indisponible. Réessayez plus tard.": "Restauration indisponible. Réessayez plus tard.",
   "Abonnement mensuel ou annuel avec renouvellement automatique. Le paiement est débité de votre compte Apple. Gérez ou annulez l’abonnement dans les réglages de votre compte Apple avant la fin de la période en cours.": "Abonnement mensuel ou annuel avec renouvellement automatique. Le paiement est débité de votre compte Apple. Gérez ou annulez l’abonnement dans les réglages de votre compte Apple avant la fin de la période en cours.",
-  "Si un code actif correspond à cette adresse, un e-mail de récupération vient d’être demandé. Vous pouvez également utiliser le code transmis par votre entreprise.": "Si un code actif correspond à cette adresse, un e-mail de récupération vient d’être demandé. Vous pouvez également utiliser le code transmis par votre entreprise."
+  "Si un code actif correspond à cette adresse, un e-mail de récupération vient d’être demandé. Vous pouvez également utiliser le code transmis par votre entreprise.": "Si un code actif correspond à cette adresse, un e-mail de récupération vient d’être demandé. Vous pouvez également utiliser le code transmis par votre entreprise.",
+  "Se connecter avec Apple": "Se connecter avec Apple",
+  "Chargement du prix…": "Chargement du prix…",
+  "Offre indisponible": "Offre indisponible",
+  "La connexion Apple n’a pas abouti. Réessayez.": "La connexion Apple n’a pas abouti. Réessayez.",
+  "Connecte-toi pour continuer (Apple, Google ou email).": "Connecte-toi pour continuer (Apple, Google ou email)."
 }

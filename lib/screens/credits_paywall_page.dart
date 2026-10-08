@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import '../widgets/localized_text.dart';
 import 'package:flutter/material.dart';
@@ -23,7 +25,9 @@ import '../theme/prospecto_colors.dart';
 /// - optimisation offline
 /// - sans pub
 class CreditsPaywallPage extends StatefulWidget {
-  const CreditsPaywallPage({super.key});
+  const CreditsPaywallPage({super.key, this.usageMeter});
+
+  final UsageMeter? usageMeter;
 
   @override
   State<CreditsPaywallPage> createState() => _CreditsPaywallPageState();
@@ -33,7 +37,7 @@ class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
   bool get _apple =>
       defaultTargetPlatform == TargetPlatform.iOS ||
       defaultTargetPlatform == TargetPlatform.macOS;
-  final _meter = UsageMeter();
+  late final _meter = widget.usageMeter ?? UsageMeter();
   late final InAppPurchaseService _iap;
 
   bool _loading = true;
@@ -62,6 +66,14 @@ class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
   }
 
   Future<void> _boot() async {
+    if (_apple) {
+      // StoreKit prices and subscription information must remain visible even
+      // when Firestore is slow. Restoration is only requested by the user.
+      setState(() => _loading = false);
+      unawaited(_refreshAppleEntitlements());
+      await _loadProductsWithRetry();
+      return;
+    }
     try {
       await _meter.initIfNeeded();
       await _meter.syncFromCloud();
@@ -84,6 +96,14 @@ class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
     }
   }
 
+  Future<void> _refreshAppleEntitlements() async {
+    try {
+      await _refresh().timeout(const Duration(seconds: 10));
+    } catch (_) {
+      // A cloud outage must not hide the StoreKit catalogue.
+    }
+  }
+
   Future<void> _refresh() async {
     await _meter.syncFromCloud();
     final premium = await _meter.isPremium();
@@ -93,6 +113,7 @@ class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
   }
 
   Future<void> _loadProductsWithRetry() async {
+    if (!mounted) return;
     setState(() {
       _loadingProducts = true;
       _productsError = null;
@@ -100,11 +121,15 @@ class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
 
     try {
       final ok = await _iap.loadProducts();
-      if (!ok) {
+      if (!mounted) return;
+      if (!ok ||
+          _iap.getProduct(InAppPurchaseService.premiumMonthly) == null ||
+          _iap.getProduct(InAppPurchaseService.premiumYearly) == null) {
         _productsError =
             "Les abonnements sont temporairement indisponibles. Réessayez plus tard.";
       }
     } catch (_) {
+      if (!mounted) return;
       _productsError =
           'Les abonnements sont temporairement indisponibles. Réessayez plus tard.';
     }
@@ -227,9 +252,21 @@ class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
                 if (_productsError != null)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: LText(
-                      _productsError!,
-                      style: TextStyle(color: cs.error),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        LText(
+                          _productsError!,
+                          style: TextStyle(color: cs.error),
+                        ),
+                        TextButton.icon(
+                          onPressed: _loadingProducts
+                              ? null
+                              : _loadProductsWithRetry,
+                          icon: const Icon(Icons.refresh),
+                          label: const LText('Réessayer'),
+                        ),
+                      ],
                     ),
                   ),
 
@@ -255,14 +292,22 @@ class _CreditsPaywallPageState extends State<CreditsPaywallPage> {
 
                 _PlanTile(
                   title: "Mensuel",
-                  subtitle: pMonthly?.price ?? "—",
+                  subtitle:
+                      pMonthly?.price ??
+                      (_loadingProducts
+                          ? 'Chargement du prix…'
+                          : 'Offre indisponible'),
                   enabled: !_isPurchasing && !_isPremium && pMonthly != null,
                   onTap: pMonthly == null ? null : () => _buy(pMonthly),
                 ),
                 const SizedBox(height: 10),
                 _PlanTile(
                   title: "Annuel",
-                  subtitle: pYearly?.price ?? "—",
+                  subtitle:
+                      pYearly?.price ??
+                      (_loadingProducts
+                          ? 'Chargement du prix…'
+                          : 'Offre indisponible'),
                   enabled: !_isPurchasing && !_isPremium && pYearly != null,
                   onTap: pYearly == null ? null : () => _buy(pYearly),
                   highlight: true,

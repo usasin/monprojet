@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 import '../widgets/localized_text.dart';
+import '../widgets/apple_sign_in_button.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -66,13 +67,17 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({
     Key? key,
     this.autoGoogle = false,
+    this.autoApple = false,
     this.reason,
     this.forcePersonalWorkspace = false,
+    this.auth,
   }) : super(key: key);
 
   final bool autoGoogle;
+  final bool autoApple;
   final String? reason;
   final bool forcePersonalWorkspace;
+  final FirebaseAuth? auth;
 
   static const routeName = '/login';
 
@@ -82,7 +87,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  final _auth = FirebaseAuth.instance;
+  late final _auth = widget.auth ?? FirebaseAuth.instance;
   final _google = GoogleSignIn();
 
   final _emailCtrl = TextEditingController();
@@ -110,6 +115,8 @@ class _LoginScreenState extends State<LoginScreen>
     _loadSavedEmail();
     if (widget.autoGoogle) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _signInGoogle());
+    } else if (widget.autoApple && appleSignInAvailable) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _signInApple());
     }
   }
 
@@ -233,6 +240,32 @@ class _LoginScreenState extends State<LoginScreen>
       await _afterAuth(await _auth.signInWithCredential(cred));
     } catch (e) {
       _setError(e.toString());
+    }
+  }
+
+  Future<void> _signInApple() async {
+    if (!mounted || _loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final provider = AppleAuthProvider()
+        ..addScope('email')
+        ..addScope('name');
+      await _afterAuth(await _auth.signInWithProvider(provider));
+    } on FirebaseAuthException catch (e) {
+      if (const {
+        'canceled',
+        'user-cancelled',
+        'web-context-cancelled',
+      }.contains(e.code)) {
+        _setError(null);
+      } else {
+        _setError(_authError(e.code));
+      }
+    } catch (_) {
+      _setError('La connexion Apple n’a pas abouti. Réessayez.');
     }
   }
 
@@ -520,6 +553,12 @@ class _LoginScreenState extends State<LoginScreen>
                       const SizedBox(height: 14),
 
                       // ── Social buttons
+                      if (appleSignInAvailable) ...[
+                        AppleSignInButton(
+                          onPressed: _loading ? null : _signInApple,
+                        ),
+                        const SizedBox(height: 10),
+                      ],
                       if (!kIsWeb) ...[
                         _SocialButton(
                           label: 'Continuer avec Google'.tr(),
@@ -919,11 +958,28 @@ Future<void> showLoginBottomSheet(
             LText('Se connecter', style: Theme.of(ctx).textTheme.titleLarge),
             const SizedBox(height: 8),
             LText(
-              reason ?? "Connecte-toi pour continuer (Google ou email).",
+              reason ??
+                  (appleSignInAvailable
+                      ? 'Connecte-toi pour continuer (Apple, Google ou email).'
+                      : 'Connecte-toi pour continuer (Google ou email).'),
               textAlign: TextAlign.center,
               style: Theme.of(ctx).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
+            if (appleSignInAvailable) ...[
+              AppleSignInButton(
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          LoginScreen(autoApple: true, reason: reason),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(

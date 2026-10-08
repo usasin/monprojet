@@ -48,10 +48,8 @@ workflows:
           set -euo pipefail
           flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos
           flutter test --no-pub
-      - name: Capture actual iPhone and iPad App Store screens
-        script: |
-          set -euo pipefail
-          python3 tools/capture_appstore_screenshots.py
+      # Existing iPhone/iPad screenshots are already in App Store Connect.
+      # Regenerate them separately only when the product-page screens change.
       - name: Configure app-specific App Store profile
         script: |
           set -euo pipefail
@@ -73,8 +71,6 @@ workflows:
           python3 tools/verify_ios_ipa.py
     artifacts:
       - build/ios/ipa/*.ipa
-      - build/appstore-screenshots/**/*.png
-      - build/appstore-screenshots/**/*.jpg
       - build/ios/archive/Runner.xcarchive/dSYMs/*.dSYM
       - /tmp/xcodebuild_logs/*.log
     publishing:

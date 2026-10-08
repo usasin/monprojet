@@ -1,0 +1,8 @@
+--- a/ios/Runner.xcodeproj/project.pbxproj
++++ b/ios/Runner.xcodeproj/project.pbxproj
+@@ -369,0 +370 @@
++				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
+@@ -548,0 +550 @@
++				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
+@@ -570,0 +573 @@
++				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
