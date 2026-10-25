@@ -109,9 +109,18 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
   bool              _showOnlyChosen  = false;
 
   // ── Recherche OSM
+  // Presets pour prospection de proximite ou grands comptes.
+  static const List<int> _radiiMeters = [500, 1000, 2000, 5000, 10000];
   int  _radiusIndex  = 1;
   static const List<String> _quickKeywordsFr = [
     'restaurant',
+    'CHR',
+    'GMS',
+    'parapharmacie',
+    'zone d’activités',
+    'TPE/PME',
+    'grands comptes',
+    'logistique',
     'coiffeur',
     'B2B',
     'hôtel',
@@ -121,6 +130,13 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
   ];
   static const List<String> _quickKeywordsEn = [
     'restaurant',
+    'HORECA',
+    'supermarket',
+    'drugstore',
+    'business park',
+    'SME',
+    'large enterprise',
+    'logistics',
     'hairdresser',
     'B2B',
     'hotel',
@@ -483,7 +499,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
     final street = _streetCtrl.text.trim();
     if (street.isEmpty) return;
     final q = _categoryCtrl.text.trim();
-    final radius = _radiusIndex == 0 ? 500 : (_radiusIndex == 1 ? 1000 : 2000);
+    final radius = _radiiMeters[_radiusIndex];
     final key = '${street.toLowerCase()}|${q.toLowerCase()}|$radius';
     final now = DateTime.now();
     if (_lastSearchAt != null &&
@@ -516,6 +532,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
         query: q,
         radiusMeters: radius,
         languageCode: languageCode,
+        countryCode: geo.countryCode,
       );
       if (!mounted || token != _fetchToken) return;
 
@@ -1459,7 +1476,7 @@ class _SearchSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radiusLabels = ['500 m', '1 km', '2 km'];
+    final radiusLabels = ['500 m', '1 km', '2 km', '5 km', '10 km'];
     return Padding(
       padding: const EdgeInsets.only(top: 14),
       child: Column(
@@ -1529,7 +1546,7 @@ class _SearchSection extends StatelessWidget {
               overlayColor: _Palette.indigo.withOpacity(0.15),
             ),
             child: Slider(
-              value: radiusIndex.toDouble(), min: 0, max: 2, divisions: 2,
+              value: radiusIndex.toDouble(), min: 0, max: 4, divisions: 4,
               label: radiusLabels[radiusIndex],
               onChanged: (v) => onRadiusChanged(v.round()),
             ),
