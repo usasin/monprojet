@@ -14,6 +14,8 @@ void main() {
       expect(FrenchRegistryService.nafCodesFor('CHR'),
           '55.10Z,55.20Z,56.10A,56.10B,56.10C,56.30Z');
       expect(FrenchRegistryService.nafCodesFor('GMS'), '47.11D,47.11F');
+      expect(FrenchRegistryService.nafCodesFor('CHR, GMS'),
+          '55.10Z,55.20Z,56.10A,56.10B,56.10C,56.30Z,47.11D,47.11F');
       expect(FrenchRegistryService.nafCodesFor('parapharmacie'),
           '47.75Z,47.73Z');
       expect(FrenchRegistryService.nafCodesFor('grands comptes'), '');
