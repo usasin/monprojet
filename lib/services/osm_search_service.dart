@@ -31,6 +31,11 @@ class OSMPlace {
   final String? instagram;
   final String? facebook;
   final String? linkedin;
+  final String? source;
+  final String? siret;
+  final String? nafCode;
+  final String? cuisine;
+  final String? description;
 
   OSMPlace({
     required this.id,
@@ -46,6 +51,11 @@ class OSMPlace {
     this.instagram,
     this.facebook,
     this.linkedin,
+    this.source,
+    this.siret,
+    this.nafCode,
+    this.cuisine,
+    this.description,
   });
 }
 
@@ -86,7 +96,7 @@ class OSMSearchService {
   static const Duration _geocodeStaleFallback = Duration(hours: 24);
   static const Duration _nearbyTtl = Duration(minutes: 5);
   static const Duration _nearbyStaleFallback = Duration(minutes: 30);
-  static const Duration _endpointCooldown = Duration(seconds: 75);
+  static const Duration _endpointCooldown = Duration(minutes: 3);
   static const int _maxGeocodeCacheEntries = 80;
   static const int _maxNearbyCacheEntries = 40;
 
@@ -205,10 +215,11 @@ class OSMSearchService {
     required String query,
     required int radiusMeters,
     String languageCode = 'en',
+    bool expandedRestaurants = true,
   }) async {
     final q = query.trim();
     final cacheKey =
-        '${lat.toStringAsFixed(5)}|${lng.toStringAsFixed(5)}|$radiusMeters|${q.toLowerCase()}|${languageCode.toLowerCase()}';
+        '${lat.toStringAsFixed(5)}|${lng.toStringAsFixed(5)}|$radiusMeters|${q.toLowerCase()}|${languageCode.toLowerCase()}|$expandedRestaurants';
     final now = DateTime.now();
     final cached = _nearbyCache[cacheKey];
     if (cached != null && now.difference(cached.storedAt) < _nearbyTtl) {
@@ -227,6 +238,7 @@ class OSMSearchService {
       languageCode: languageCode,
       cacheKey: cacheKey,
       stale: cached,
+      expandedRestaurants: expandedRestaurants,
     );
     _nearbyInFlight[cacheKey] = request;
     try {
@@ -246,6 +258,7 @@ class OSMSearchService {
     required String languageCode,
     required String cacheKey,
     required _TimedCacheEntry<List<OSMPlace>>? stale,
+    required bool expandedRestaurants,
   }) async {
     final tokens = _tokenize(query);
     final overpassQuery = _buildOverpassQuery(
@@ -253,6 +266,7 @@ class OSMSearchService {
       lng: lng,
       radius: radiusMeters,
       tokens: tokens,
+      expandedRestaurants: expandedRestaurants,
     );
 
     try {
@@ -329,6 +343,11 @@ class OSMSearchService {
                 _clean(_pickFirst(tags, const ['contact:facebook', 'facebook'])),
             linkedin:
                 _clean(_pickFirst(tags, const ['contact:linkedin', 'linkedin'])),
+            source: 'OpenStreetMap',
+            siret: _clean(_pickFirst(tags, const ['ref:FR:SIRET', 'ref:siret'])),
+            nafCode: _clean(_pickFirst(tags, const ['ref:FR:NAF', 'ref:FR:APE'])),
+            cuisine: _clean(_pickFirst(tags, const ['cuisine'])),
+            description: _clean(_pickFirst(tags, const ['description', 'description:fr'])),
           ),
         );
       }
@@ -390,18 +409,17 @@ class OSMSearchService {
     // Un endpoint qui vient de timeout/429/5xx est temporairement placé en
     // retrait. Les recherches suivantes essaient d'abord les miroirs sains.
     final healthy = <String>[];
-    final coolingDown = <String>[];
     for (final endpoint in _overpassEndpoints) {
       final retryAfter = _endpointRetryAfter[endpoint];
       if (retryAfter == null || !retryAfter.isAfter(now)) {
         healthy.add(endpoint);
-      } else {
-        coolingDown.add(endpoint);
       }
     }
-    final endpoints = healthy.isNotEmpty
-        ? <String>[...healthy, ...coolingDown]
-        : List<String>.from(_overpassEndpoints);
+    // Ne pas reessayer immediatement les miroirs occupes.
+    if (healthy.isEmpty) {
+      throw StateError('Tous les miroirs OSM sont temporairement occupes.');
+    }
+    final endpoints = healthy;
 
     for (final endpoint in endpoints) {
       final uri = Uri.parse(endpoint);
@@ -416,7 +434,7 @@ class OSMSearchService {
               },
               body: {'data': overpassQuery},
             )
-            .timeout(const Duration(seconds: 18));
+            .timeout(const Duration(seconds: 9));
 
         if (response.statusCode == 200) {
           _endpointRetryAfter.remove(endpoint);
@@ -490,6 +508,7 @@ class OSMSearchService {
     required double lng,
     required int radius,
     required List<String> tokens,
+    required bool expandedRestaurants,
   }) {
     final clauses = <String>{};
 
@@ -498,7 +517,7 @@ class OSMSearchService {
       clauses.addAll(_businessAllClauses(radius: radius, lat: lat, lng: lng));
     } else {
       for (final t in tokens) {
-        final mapped = _mapTokenToTags(t);
+        final mapped = _mapTokenToTags(t, expandedRestaurants: expandedRestaurants);
         if (mapped.isNotEmpty) {
           for (final tag in mapped) {
             clauses.add('nwr$tag(around:$radius,$lat,$lng);');
@@ -511,7 +530,7 @@ class OSMSearchService {
     }
 
     return '''
-[out:json][timeout:15];
+[out:json][timeout:12];
 (
 ${clauses.join('\n')}
 );
@@ -600,7 +619,7 @@ out center tags qt 500;
 
   /// Mappe un token (texte) vers des tags OSM connus.
   /// Retourne des sélecteurs Overpass du type ["shop"="hairdresser"]
-  List<String> _mapTokenToTags(String token) {
+  List<String> _mapTokenToTags(String token, {bool expandedRestaurants = true}) {
     final t = token.trim().toLowerCase();
     if (t.isEmpty) return const [];
 
@@ -626,11 +645,19 @@ out center tags qt 500;
         t.contains('kebab') ||
         t.contains('cafe') ||
         t.contains('coffee')) {
-      return const [
-        '["amenity"="restaurant"]',
-        '["amenity"="fast_food"]',
-        '["amenity"="cafe"]',
-      ];
+      return expandedRestaurants
+          ? const [
+              '["amenity"="restaurant"]',
+              '["amenity"="fast_food"]',
+              '["amenity"="cafe"]',
+              '["amenity"="bar"]',
+              '["amenity"="food_court"]',
+            ]
+          : const [
+              '["amenity"="restaurant"]',
+              '["amenity"="fast_food"]',
+              '["amenity"="cafe"]',
+            ];
     }
 
     // ---- Hôtel ----
