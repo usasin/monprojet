@@ -13,17 +13,43 @@ class FrenchRegistryService {
   static const _url = 'recherche-entreprises.api.gouv.fr';
 
   static bool supportsLocation(double lat, double lng) =>
-      lat >= 41 && lat <= 51.5 && lng >= -5.6 && lng <= 9.8;
+      lat >= 41 && lat <= 51.15 && lng >= -5.6 && lng <= 9.8;
 
   // Retourne les codes NAF applicables ou null si cette activite n'est
   // pas traduisible de maniere fiable en NAF.
   static String? nafCodesFor(String search) {
     final query = search.trim().toLowerCase();
+    // NAF/APE ne s'applique qu'aux entreprises francaises.
     if (query.isEmpty) return '';
     final explicit = RegExp(r'\b\d{2}\.\d{2}[a-z]\b', caseSensitive: false)
         .firstMatch(query);
     if (explicit != null) return explicit.group(0)!.toUpperCase();
 
+    if (query == 'chr' || query.contains('horeca')) {
+      return '55.10Z,55.20Z,56.10A,56.10B,56.10C,56.30Z';
+    }
+    if (query == 'gms' || query.contains('grande surface') ||
+        query.contains('hypermarche') || query.contains('hypermarché') ||
+        query.contains('supermarket') || query.contains('hypermarket')) {
+      return '47.11D,47.11F';
+    }
+    if (query.contains('parapharm') || query.contains('drugstore') ||
+        query.contains('chemist')) {
+      return '47.75Z,47.73Z';
+    }
+    if (query == 'tpe' || query == 'pme' || query == 'tpe/pme' ||
+        query.contains('grand compte') || query.contains('grands comptes') ||
+        query.contains('zone d') || query.contains('zone industriel') ||
+        query.contains('zone commerciale') ||
+        query.contains('business park') || query.contains('industrial park') ||
+        query.contains('parc d\'activit')) {
+      return ''; // Toutes activites : pas d'invention de NAF universel.
+    }
+    if (query.contains('logistique') || query.contains('logistics') ||
+        query.contains('entrepot') || query.contains('entrepôt') ||
+        query.contains('transport')) {
+      return '49.41A,49.41B,52.10B,52.29B';
+    }
     if (query.contains('resto') ||
         query.contains('restaurant') ||
         query.contains('pizza') ||
@@ -57,6 +83,7 @@ class FrenchRegistryService {
     required int radiusMeters,
     required String nafCodes,
     int page = 1,
+    bool sortBySize = false,
   }) {
     return Uri.https(_url, '/near_point', {
       'lat': lat.toStringAsFixed(6),
@@ -64,6 +91,7 @@ class FrenchRegistryService {
       'radius': (radiusMeters / 1000).toStringAsFixed(2),
       'page': '$page',
       'per_page': '25',
+      if (sortBySize) 'sort_by_size': 'true',
       if (nafCodes.isNotEmpty) 'activite_principale': nafCodes,
     });
   }
@@ -77,16 +105,20 @@ class FrenchRegistryService {
   }) async {
     if (!supportsLocation(lat, lng)) return const [];
     final nafCodes = nafCodesFor(query);
+    final normalized = query.toLowerCase();
+    final sortBySize = normalized.contains('grand compte') ||
+        normalized.contains('grands comptes') ||
+        normalized.contains('large enterprise');
     if (nafCodes == null) return const [];
 
     final results = <OSMPlace>[];
     final seen = <String>{};
-    // Limite volontaire : au plus 50 entreprises, deux requetes publiques.
-    // Les recherches locales ne doivent pas saturer l'API d'Etat.
-    for (var page = 1; page <= 2; page++) {
+    // Limite adaptee a la prospection : maximum 100 unites legales par zone.
+    // La recherche reste paginee pour respecter les quotas de l'API publique.
+    for (var page = 1; page <= 4; page++) {
       final uri = buildUri(
         lat: lat, lng: lng, radiusMeters: radiusMeters,
-        nafCodes: nafCodes, page: page,
+        nafCodes: nafCodes, page: page, sortBySize: sortBySize,
       );
       final res = await _client.get(uri, headers: {
         'Accept': 'application/json',
