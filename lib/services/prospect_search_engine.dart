@@ -24,10 +24,11 @@ class ProspectSearchEngine {
     required int radiusMeters,
     required String query,
     String languageCode = 'fr',
+    String? countryCode,
   }) async {
     final config = await ProspectSearchConfigService.instance.load();
     final key =
-        '${lat.toStringAsFixed(5)}|${lng.toStringAsFixed(5)}|$radiusMeters|${query.trim().toLowerCase()}|${config.toMap()}';
+        '${lat.toStringAsFixed(5)}|${lng.toStringAsFixed(5)}|$radiusMeters|${query.trim().toLowerCase()}|${languageCode.toLowerCase()}|${countryCode ?? ''}|${config.toMap()}';
     final now = DateTime.now();
     final cached = _cache[key];
     if (cached != null && now.difference(cached.savedAt) < _cacheTtl) {
@@ -40,6 +41,7 @@ class ProspectSearchEngine {
       query: query, languageCode: languageCode, config: config,
       stale: cached,
       cacheKey: key,
+      countryCode: countryCode,
     );
     _inFlight[key] = future;
     try {
@@ -66,6 +68,7 @@ class ProspectSearchEngine {
     required ProspectSearchConfig config,
     required _SearchCacheEntry? stale,
     required String cacheKey,
+    required String? countryCode,
   }) async {
     if (!config.overpassEnabled && !config.registryEnabled) {
       throw StateError('Toutes les sources de recherche sont desactivees.');
@@ -94,7 +97,11 @@ class ProspectSearchEngine {
       }));
     }
 
-    if (config.registryEnabled && FrenchRegistryService.supportsLocation(lat, lng) &&
+    // NAF/APE n'existe pas hors de France. Le pays vient de Nominatim,
+    // jamais de la langue de l'interface (un commercial francais peut
+    // prospecter a Londres ou a Dubai).
+    if (config.registryEnabled && countryCode?.toLowerCase() == 'fr' &&
+        FrenchRegistryService.supportsLocation(lat, lng) &&
         FrenchRegistryService.nafCodesFor(query) != null) {
       tasks.add(_registry.searchNearby(
         lat: lat, lng: lng, query: query,
