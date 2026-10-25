@@ -32,13 +32,13 @@ class FrenchRegistryService {
         query.contains('fast food')) {
       return '56.10A,56.10B,56.10C';
     }
-    if (query.contains('cafe') || query.contains('café') ||
-        query.contains('bar') || query.contains('coffee')) {
-      return '56.30Z,56.10A,56.10C';
-    }
     if (query.contains('coif') || query.contains('barbier') ||
         query.contains('barber') || query.contains('hairdresser')) {
       return '96.02A';
+    }
+    if (query.contains('cafe') || query.contains('café') ||
+        query.contains('bar') || query.contains('coffee')) {
+      return '56.30Z,56.10A,56.10C';
     }
     if (query.contains('hotel') || query.contains('hôtel')) return '55.10Z';
     if (query.contains('pharm')) return '47.73Z';
