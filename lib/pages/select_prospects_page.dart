@@ -25,6 +25,7 @@ import '../services/ad_config.dart';
 import '../services/ad_service.dart';
 import '../services/usage_meter.dart';
 import '../services/osm_search_service.dart';
+import '../services/prospect_search_engine.dart';
 import '../screens/credits_paywall_page.dart';
 import '../widgets/brand_background.dart';
 import '../ui/bling.dart';
@@ -145,6 +146,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
 
   // ── OSM
   final _osm = OSMSearchService();
+  final _searchEngine = ProspectSearchEngine();
 
   // ── Animations
   late final AnimationController _fabAnim = AnimationController(
@@ -508,7 +510,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
       );
       if (!mounted || token != _fetchToken) return;
 
-      final results = await _osm.searchNearby(
+      final results = await _searchEngine.searchNearby(
         lat: geo.lat,
         lng: geo.lng,
         query: q,
@@ -542,6 +544,11 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
             instagram: r.instagram,
             facebook: r.facebook,
             linkedin: r.linkedin,
+            source: r.source,
+            siret: r.siret,
+            nafCode: r.nafCode,
+            cuisine: r.cuisine,
+            description: r.description,
           ),
       ];
 
@@ -2097,6 +2104,27 @@ class _ProspectSheet extends StatelessWidget {
                   const SizedBox(height: 10),
                   if (prospect.category.isNotEmpty)
                     _MiniChip(label: prospect.category, color: _Palette.indigo),
+                  if (prospect.source?.isNotEmpty == true) ...[
+                    const SizedBox(height: 6),
+                    _MiniChip(label: prospect.source!, color: _Palette.mint),
+                  ],
+                  if (prospect.siret?.isNotEmpty == true) ...[
+                    const SizedBox(height: 6),
+                    LText('SIRET : ${prospect.siret}'),
+                  ],
+                  if (prospect.nafCode?.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    LText('Code NAF / APE : ${prospect.nafCode}'),
+                  ],
+                  if (prospect.cuisine?.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    LText('Cuisine : ${prospect.cuisine}'),
+                  ],
+                  if (prospect.description?.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    LText(prospect.description!, maxLines: 3,
+                      overflow: TextOverflow.ellipsis),
+                  ],
                   const SizedBox(height: 16),
                   // Actions liens
                   Wrap(
