@@ -128,8 +128,8 @@ class ProspectSearchEngine {
     // Une premiere source avec des resultats libere l'ecran apres une courte
     // marge pour obtenir les enrichissements de la seconde. Au plus 14s.
     await Future.any<void>([
-      allDone.then((_) {}),
-      earlyResults.future.then((_) =>
+      allDone.then<void>((_) {}),
+      earlyResults.future.then<void>((_) =>
           Future<void>.delayed(const Duration(milliseconds: 1400))),
       Future<void>.delayed(const Duration(seconds: 14)),
     ]);
