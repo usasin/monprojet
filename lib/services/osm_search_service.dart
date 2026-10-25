@@ -331,7 +331,7 @@ class OSMSearchService {
                   : query,
               languageCode: languageCode,
             ),
-            phone: _clean(_pickFirst(tags, const ['contact:phone', 'phone'])),
+            phone: _clean(_pickFirst(tags, const ['contact:phone', 'phone', 'contact:mobile', 'mobile'])),
             email: _clean(_pickFirst(tags, const ['contact:email', 'email'])),
             website: _clean(
               _pickFirst(tags, const ['contact:website', 'website', 'url']),
