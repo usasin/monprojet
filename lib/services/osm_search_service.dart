@@ -13,7 +13,8 @@ import 'package:http/http.dart' as http;
 class OSMGeoPoint {
   final double lat;
   final double lng;
-  OSMGeoPoint(this.lat, this.lng);
+  final String? countryCode;
+  OSMGeoPoint(this.lat, this.lng, {this.countryCode});
 }
 
 class OSMPlace {
@@ -172,7 +173,11 @@ class OSMSearchService {
         throw Exception('Géocodage échoué: coordonnées invalides');
       }
 
-      final gp = OSMGeoPoint(lat, lon);
+      final address = item['address'];
+      final countryCode = address is Map
+          ? address['country_code']?.toString().toLowerCase()
+          : null;
+      final gp = OSMGeoPoint(lat, lon, countryCode: countryCode);
       _putBoundedCache(
         _geocodeCache,
         key,
@@ -623,6 +628,85 @@ out center tags qt 500;
     final t = token.trim().toLowerCase();
     if (t.isEmpty) return const [];
 
+    // ---- Secteurs commerciaux internationaux ----
+    // CHR/HORECA : cafes, hotels, restaurants.
+    if (t == 'chr' || t.contains('horeca') || t.contains('hotel restaurant') ||
+        t.contains('hotel-resto')) {
+      return const [
+        '["amenity"="restaurant"]',
+        '["amenity"="fast_food"]',
+        '["amenity"="cafe"]',
+        '["amenity"="bar"]',
+        '["amenity"="pub"]',
+        '["tourism"="hotel"]',
+        '["tourism"="motel"]',
+        '["tourism"="guest_house"]',
+      ];
+    }
+
+    // GMS : grandes et moyennes surfaces, enseignes de distribution.
+    if (t == 'gms' || t.contains('grande surface') ||
+        t.contains('hypermarch') || t.contains('supermarket') ||
+        t.contains('hypermarket') || t.contains('retail chain')) {
+      return const [
+        '["shop"="supermarket"]',
+        '["shop"="hypermarket"]',
+        '["shop"="department_store"]',
+        '["shop"="wholesale"]',
+      ];
+    }
+
+    if (t.contains('parapharm') || t.contains('parapharm') ||
+        t.contains('drugstore') || t.contains('chemist')) {
+      return const [
+        '["shop"="chemist"]',
+        '["shop"="beauty"]',
+        '["shop"="cosmetics"]',
+        '["shop"="health_food"]',
+        '["amenity"="pharmacy"]',
+      ];
+    }
+
+    // Une zone d'activites n'est pas toujours geocodee comme un lieu :
+    // cibler ses bureaux/ateliers/entrepots plutot que renvoyer un polygone.
+    if (t.contains('zone d') || t.contains('zone industriel') ||
+        t.contains('business park') || t.contains('industrial park') ||
+        t.contains('zone commerciale') || t.contains('parc d'activit')) {
+      return const [
+        r'["office"]["name"]',
+        r'["craft"]["name"]',
+        r'["industrial"]["name"]',
+        r'["shop"]["name"]',
+        r'["building"~"^(industrial|warehouse|commercial|retail)$"]["name"]',
+        r'["man_made"="works"]["name"]',
+      ];
+    }
+
+    if (t.contains('logistique') || t.contains('logistics') ||
+        t.contains('transport') || t.contains('warehouse') ||
+        t.contains('entrepot') || t.contains('entrepôt')) {
+      return const [
+        r'["industrial"="warehouse"]["name"]',
+        r'["building"="warehouse"]["name"]',
+        r'["office"="logistics"]["name"]',
+        r'["office"="transport"]["name"]',
+      ];
+    }
+
+    // OSM n'a pas d'indicateur fiable de taille de societe.
+    // Le ciblage par taille est propose par l'Annuaire uniquement en France.
+    if (t == 'tpe' || t == 'pme' || t == 'tpe/pme' ||
+        t.contains('grands comptes') || t.contains('grand compte') ||
+        t.contains('large enterprise') || t.contains('small business') ||
+        t.contains('sme')) {
+      return const [
+        r'["office"]["name"]',
+        r'["craft"]["name"]',
+        r'["industrial"]["name"]',
+        r'["shop"]["name"]',
+      ];
+    }
+
     // ---- Coiffure ----
     if (t.contains('coif') ||
         t.contains('barbier') ||
@@ -844,7 +928,7 @@ out center tags qt 500;
     if (shop == 'hairdresser' || craft == 'hairdresser' || shop == 'barber') {
       return isFr ? 'Coiffure' : 'Hair & beauty';
     }
-    if (amenity == 'restaurant' || amenity == 'fast_food' || amenity == 'cafe') {
+    if (amenity == 'restaurant' || amenity == 'fast_food' || amenity == 'cafe' || amenity == 'bar' || amenity == 'pub' || amenity == 'food_court') {
       return isFr ? 'Restauration' : 'Food & drink';
     }
     if (tourism == 'hotel' || tourism == 'motel' || tourism == 'guest_house') {
