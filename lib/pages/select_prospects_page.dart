@@ -2121,6 +2121,22 @@ class _ProspectSheet extends StatelessWidget {
                     const SizedBox(height: 4),
                     LText('Code NAF / APE : ${prospect.nafCode}'),
                   ],
+                  if (prospect.openingHours?.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    LText('Horaires : ${prospect.openingHours}'),
+                  ],
+                  if (prospect.instagram?.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    LText('Instagram : ${prospect.instagram}', maxLines: 2),
+                  ],
+                  if (prospect.facebook?.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    LText('Facebook : ${prospect.facebook}', maxLines: 2),
+                  ],
+                  if (prospect.linkedin?.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    LText('LinkedIn : ${prospect.linkedin}', maxLines: 2),
+                  ],
                   if (prospect.cuisine?.isNotEmpty == true) ...[
                     const SizedBox(height: 4),
                     LText('Cuisine : ${prospect.cuisine}'),
