@@ -185,6 +185,58 @@ function requireDeveloper(
   return uid;
 }
 
+// Recherche des prospects : options globales, jamais modifiables directement
+// par le client Firestore. Seul un JWT prospectoDeveloper peut les changer.
+const prospectSearchDefaults = {
+  overpassEnabled: true,
+  registryEnabled: true,
+  expandedRestaurants: true,
+};
+
+function prospectSearchSettingsRef(appId: string): DocumentReference {
+  if (appId !== "prospecto") {
+    throw new HttpsError("invalid-argument", "Application non autorisee.");
+  }
+  return appPath(appId).collection("settings").doc("prospectSearch");
+}
+
+export const getProspectSearchConfig = onCall({region}, async (request) => {
+  requireUser(request);
+  const appId = requireText(request.data?.appId, "appId", 40);
+  const doc = await prospectSearchSettingsRef(appId).get();
+  const data = doc.data() ?? {};
+  return {
+    overpassEnabled: typeof data.overpassEnabled === "boolean"
+      ? data.overpassEnabled : prospectSearchDefaults.overpassEnabled,
+    registryEnabled: typeof data.registryEnabled === "boolean"
+      ? data.registryEnabled : prospectSearchDefaults.registryEnabled,
+    expandedRestaurants: typeof data.expandedRestaurants === "boolean"
+      ? data.expandedRestaurants : prospectSearchDefaults.expandedRestaurants,
+  };
+});
+
+export const setProspectSearchConfig = onCall({region}, async (request) => {
+  const uid = requireDeveloper(request);
+  const appId = requireText(request.data?.appId, "appId", 40);
+  const overpassEnabled = request.data?.overpassEnabled;
+  const registryEnabled = request.data?.registryEnabled;
+  const expandedRestaurants = request.data?.expandedRestaurants;
+
+  if (typeof overpassEnabled !== "boolean" ||
+      typeof registryEnabled !== "boolean" ||
+      typeof expandedRestaurants !== "boolean") {
+    throw new HttpsError("invalid-argument", "Interrupteurs invalides.");
+  }
+  if (!overpassEnabled && !registryEnabled) {
+    throw new HttpsError("invalid-argument", "Conservez au moins une source active.");
+  }
+  await prospectSearchSettingsRef(appId).set({
+    overpassEnabled, registryEnabled, expandedRestaurants,
+    updatedBy: uid, updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  return {overpassEnabled, registryEnabled, expandedRestaurants};
+});
+
 function developerPlan(value: unknown): DeveloperPlan {
   const code = String(value ?? "TEAM").trim().toUpperCase() as DeveloperPlanCode;
   const plan = developerPlans[code];
