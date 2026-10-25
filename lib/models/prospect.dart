@@ -15,6 +15,11 @@ class Prospect {
   final String? instagram;
   final String? facebook;
   final String? linkedin;
+  final String? source;
+  final String? siret;
+  final String? nafCode;
+  final String? cuisine;
+  final String? description;
   final String? status;
   final String? role;
   final String? note;
@@ -41,6 +46,11 @@ class Prospect {
     this.instagram,
     this.facebook,
     this.linkedin,
+    this.source,
+    this.siret,
+    this.nafCode,
+    this.cuisine,
+    this.description,
     this.status,
     this.role,
     this.note,
@@ -74,6 +84,11 @@ class Prospect {
       instagram: data['instagram']?.toString(),
       facebook: data['facebook']?.toString(),
       linkedin: data['linkedin']?.toString(),
+      source: data['source']?.toString(),
+      siret: data['siret']?.toString(),
+      nafCode: data['nafCode']?.toString(),
+      cuisine: data['cuisine']?.toString(),
+      description: data['description']?.toString(),
       status: data['status']?.toString(),
       role: data['role']?.toString(),
       note: data['note']?.toString(),
@@ -100,6 +115,11 @@ class Prospect {
     String? instagram,
     String? facebook,
     String? linkedin,
+    String? source,
+    String? siret,
+    String? nafCode,
+    String? cuisine,
+    String? description,
     String? status,
     String? role,
     String? note,
@@ -124,6 +144,11 @@ class Prospect {
       instagram: instagram ?? this.instagram,
       facebook: facebook ?? this.facebook,
       linkedin: linkedin ?? this.linkedin,
+      source: source ?? this.source,
+      siret: siret ?? this.siret,
+      nafCode: nafCode ?? this.nafCode,
+      cuisine: cuisine ?? this.cuisine,
+      description: description ?? this.description,
       status: status ?? this.status,
       role: role ?? this.role,
       note: note ?? this.note,
@@ -149,6 +174,11 @@ class Prospect {
         if (instagram != null && instagram!.isNotEmpty) 'instagram': instagram,
         if (facebook != null && facebook!.isNotEmpty) 'facebook': facebook,
         if (linkedin != null && linkedin!.isNotEmpty) 'linkedin': linkedin,
+        if (source != null && source!.isNotEmpty) 'source': source,
+        if (siret != null && siret!.isNotEmpty) 'siret': siret,
+        if (nafCode != null && nafCode!.isNotEmpty) 'nafCode': nafCode,
+        if (cuisine != null && cuisine!.isNotEmpty) 'cuisine': cuisine,
+        if (description != null && description!.isNotEmpty) 'description': description,
         if (status != null) 'status': status,
         if (role != null) 'role': role,
         if (note != null) 'note': note,
