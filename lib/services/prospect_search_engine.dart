@@ -39,6 +39,7 @@ class ProspectSearchEngine {
       lat: lat, lng: lng, radiusMeters: radiusMeters,
       query: query, languageCode: languageCode, config: config,
       stale: cached,
+      cacheKey: key,
     );
     _inFlight[key] = future;
     try {
@@ -64,6 +65,7 @@ class ProspectSearchEngine {
     required String languageCode,
     required ProspectSearchConfig config,
     required _SearchCacheEntry? stale,
+    required String cacheKey,
   }) async {
     if (!config.overpassEnabled && !config.registryEnabled) {
       throw StateError('Toutes les sources de recherche sont desactivees.');
@@ -110,15 +112,44 @@ class ProspectSearchEngine {
     }
 
     if (tasks.isEmpty) return const [];
+    final allDone = Future.wait<void>(tasks);
+    // Les donnees de la source plus lente enrichiront le cache pour la
+    // prochaine recherche identique, sans retarder l'affichage actuel.
+    allDone.then((_) {
+      final complete = _merge(lat, lng, osm, registry);
+      if (complete.isNotEmpty) {
+        _cache.remove(cacheKey);
+        _cache[cacheKey] = _SearchCacheEntry(complete, DateTime.now());
+        while (_cache.length > _maxEntries) {
+          _cache.remove(_cache.keys.first);
+        }
+      }
+    });
     // Une premiere source avec des resultats libere l'ecran apres une courte
     // marge pour obtenir les enrichissements de la seconde. Au plus 14s.
     await Future.any<void>([
-      Future.wait<void>(tasks).then((_) {}),
+      allDone.then((_) {}),
       earlyResults.future.then((_) =>
           Future<void>.delayed(const Duration(milliseconds: 1400))),
       Future<void>.delayed(const Duration(seconds: 14)),
     ]);
 
+    final merged = _merge(lat, lng, osm, registry);
+    if (merged.isEmpty && failed > 0 &&
+        stale != null && DateTime.now().difference(stale.savedAt) < _staleTtl) {
+      return stale.places;
+    }
+    if (merged.isEmpty && completed < tasks.length) {
+      throw TimeoutException('Recherche indisponible : delai depasse.');
+    }
+    if (merged.isEmpty && completed == failed && completed > 0) {
+      throw StateError('Les sources de recherche sont indisponibles.');
+    }
+    return merged;
+  }
+
+  static List<OSMPlace> _merge(double lat, double lng,
+      List<OSMPlace> osm, List<OSMPlace> registry) {
     final merged = <OSMPlace>[...osm];
     for (final place in registry) {
       final matched = merged.indexWhere((existing) {
@@ -151,13 +182,6 @@ class ProspectSearchEngine {
     merged.sort((a, b) => _distance(lat, lng, a.lat, a.lng)
         .compareTo(_distance(lat, lng, b.lat, b.lng)));
 
-    if (merged.isEmpty && failed > 0 &&
-        stale != null && DateTime.now().difference(stale.savedAt) < _staleTtl) {
-      return stale.places;
-    }
-    if (merged.isEmpty && completed == failed && completed > 0) {
-      throw StateError('Les sources de recherche sont indisponibles.');
-    }
     return merged;
   }
 
