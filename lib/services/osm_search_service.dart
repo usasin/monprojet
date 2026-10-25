@@ -391,7 +391,7 @@ class OSMSearchService {
       try {
         final response = await _client
             .get(uri, headers: _headers)
-            .timeout(const Duration(seconds: 22));
+            .timeout(const Duration(seconds: 7));
         if (response.statusCode == 200) return response;
         lastError = Exception('HTTP ${response.statusCode}');
         if (response.statusCode != 429 && response.statusCode < 500) {
@@ -401,7 +401,7 @@ class OSMSearchService {
         lastError = error;
       }
       if (attempt == 0) {
-        await Future<void>.delayed(const Duration(milliseconds: 1200));
+        await Future<void>.delayed(const Duration(milliseconds: 500));
       }
     }
     throw Exception('Géocodage indisponible: ${lastError ?? 'erreur réseau'}');
@@ -656,7 +656,7 @@ out center tags qt 500;
       ];
     }
 
-    if (t.contains('parapharm') || t.contains('parapharm') ||
+    if (t.contains('parapharm') ||
         t.contains('drugstore') || t.contains('chemist')) {
       return const [
         '["shop"="chemist"]',
