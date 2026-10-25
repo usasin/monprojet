@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/org_provider.dart';
 import '../services/developer_access_service.dart';
+import '../services/prospect_search_config_service.dart';
 import '../theme/prospecto_colors.dart';
 import '../widgets/brand_background.dart';
 import '../widgets/localized_text.dart';
@@ -31,6 +32,8 @@ class _DeveloperConsoleScreenState extends State<DeveloperConsoleScreen> {
   bool _checking = true;
   bool _isDeveloper = false;
   bool _busy = false;
+  bool _searchBusy = true;
+  ProspectSearchConfig _searchConfig = const ProspectSearchConfig();
   String _selectedPlan = 'TEAM';
   DeveloperActivationCode? _activation;
   bool _routeArgumentsApplied = false;
@@ -69,6 +72,7 @@ class _DeveloperConsoleScreenState extends State<DeveloperConsoleScreen> {
         _isDeveloper = allowed;
         _checking = false;
       });
+      if (allowed) _loadSearchConfig();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -86,6 +90,37 @@ class _DeveloperConsoleScreenState extends State<DeveloperConsoleScreen> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  Future<void> _loadSearchConfig() async {
+    if (mounted) setState(() => _searchBusy = true);
+    final config = await ProspectSearchConfigService.instance.load(
+      forceRefresh: true,
+    );
+    if (!mounted) return;
+    setState(() {
+      _searchConfig = config;
+      _searchBusy = false;
+    });
+  }
+
+  Future<void> _updateSearchConfig(ProspectSearchConfig next) async {
+    if (_searchBusy) return;
+    if (!next.overpassEnabled && !next.registryEnabled) {
+      _showMessage('Conservez au moins une source de recherche active.');
+      return;
+    }
+    setState(() => _searchBusy = true);
+    try {
+      await ProspectSearchConfigService.instance.save(next);
+      if (!mounted) return;
+      setState(() => _searchConfig = next);
+      _showMessage('Recherche Prospecto : reglages enregistres.');
+    } catch (error) {
+      _showMessage('Enregistrement impossible : $error');
+    } finally {
+      if (mounted) setState(() => _searchBusy = false);
+    }
   }
 
   Future<void> _generateCode() async {
@@ -254,6 +289,13 @@ class _DeveloperConsoleScreenState extends State<DeveloperConsoleScreen> {
                               color: ProspectoColors.blue,
                             ),
                             const SizedBox(height: 14),
+                            _SearchSettingsCard(
+                              config: _searchConfig,
+                              busy: _searchBusy,
+                              onChanged: _updateSearchConfig,
+                              onRefresh: _loadSearchConfig,
+                            ),
+                            const SizedBox(height: 14),
                             _PlanSelector(
                               selectedPlan: _selectedPlan,
                               onChanged: _busy
@@ -294,6 +336,75 @@ class _DeveloperConsoleScreenState extends State<DeveloperConsoleScreen> {
                           ],
                         ),
         ),
+      ),
+    );
+  }
+}
+
+class _SearchSettingsCard extends StatelessWidget {
+  const _SearchSettingsCard({
+    required this.config,
+    required this.busy,
+    required this.onChanged,
+    required this.onRefresh,
+  });
+
+  final ProspectSearchConfig config;
+  final bool busy;
+  final ValueChanged<ProspectSearchConfig> onChanged;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Expanded(
+              child: LText('Recherche des prospects — global',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+            ),
+            IconButton(
+              tooltip: 'Actualiser',
+              onPressed: busy ? null : onRefresh,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ]),
+          const LText(
+            'Ces options s’appliquent a tous les utilisateurs apres actualisation. '
+            'Les changements ne modifient ni les clients ni les tournees.',
+            style: TextStyle(fontSize: 12),
+          ),
+          if (busy) const LinearProgressIndicator(minHeight: 2),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const LText('OpenStreetMap / Overpass'),
+            subtitle: const LText('Etablissements et contacts dans le monde'),
+            value: config.overpassEnabled,
+            onChanged: busy ? null : (value) => onChanged(
+              config.copyWith(overpassEnabled: value),
+            ),
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const LText('Annuaire officiel des entreprises'),
+            subtitle: const LText('France : SIRET et filtres NAF/APE gratuits'),
+            value: config.registryEnabled,
+            onChanged: busy ? null : (value) => onChanged(
+              config.copyWith(registryEnabled: value),
+            ),
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const LText('Restauration elargie'),
+            subtitle: const LText('Restaurants, restauration rapide, cafes, bars, food courts'),
+            value: config.expandedRestaurants,
+            onChanged: busy ? null : (value) => onChanged(
+              config.copyWith(expandedRestaurants: value),
+            ),
+          ),
+        ],
       ),
     );
   }
