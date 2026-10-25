@@ -11,6 +11,15 @@ void main() {
           '56.10A,56.10B,56.10C');
       expect(FrenchRegistryService.nafCodesFor('coiffeur'), '96.02A');
       expect(FrenchRegistryService.nafCodesFor('barber'), '96.02A');
+      expect(FrenchRegistryService.nafCodesFor('CHR'),
+          '55.10Z,55.20Z,56.10A,56.10B,56.10C,56.30Z');
+      expect(FrenchRegistryService.nafCodesFor('GMS'), '47.11D,47.11F');
+      expect(FrenchRegistryService.nafCodesFor('parapharmacie'),
+          '47.75Z,47.73Z');
+      expect(FrenchRegistryService.nafCodesFor('grands comptes'), '');
+      expect(FrenchRegistryService.nafCodesFor('zone d’activités'), '');
+      expect(FrenchRegistryService.nafCodesFor('logistique'),
+          '49.41A,49.41B,52.10B,52.29B');
       expect(FrenchRegistryService.nafCodesFor('56.10C'), '56.10C');
       expect(FrenchRegistryService.nafCodesFor('B2B'), isNull);
     });
@@ -40,6 +49,15 @@ void main() {
     expect(config.registryEnabled, isTrue);
     expect(config.expandedRestaurants, isTrue);
     expect(config.copyWith(registryEnabled: false).registryEnabled, isFalse);
+  });
+
+  test('le tri grands comptes est explicite sans inventer de taille', () {
+    final uri = FrenchRegistryService.buildUri(
+      lat: 43.3, lng: 5.37, radiusMeters: 10000,
+      nafCodes: '', sortBySize: true,
+    );
+    expect(uri.queryParameters['radius'], '10.00');
+    expect(uri.queryParameters['sort_by_size'], 'true');
   });
 
   test('les metadonnees de prospection sont conservees', () {
