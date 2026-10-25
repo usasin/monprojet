@@ -10,6 +10,7 @@ void main() {
       expect(FrenchRegistryService.nafCodesFor('restaurant'),
           '56.10A,56.10B,56.10C');
       expect(FrenchRegistryService.nafCodesFor('coiffeur'), '96.02A');
+      expect(FrenchRegistryService.nafCodesFor('barber'), '96.02A');
       expect(FrenchRegistryService.nafCodesFor('56.10C'), '56.10C');
       expect(FrenchRegistryService.nafCodesFor('B2B'), isNull);
     });
