@@ -174,7 +174,7 @@ class ProspectSearchEngine {
           openingHours: old.openingHours, instagram: old.instagram,
           facebook: old.facebook, linkedin: old.linkedin,
           cuisine: old.cuisine, description: old.description,
-          source: 'OpenStreetMap + Annuaire des Entreprises',
+          source: 'OSM + Annuaire FR',
           siret: place.siret, nafCode: place.nafCode,
         );
       }
