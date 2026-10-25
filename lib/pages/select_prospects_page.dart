@@ -2073,8 +2073,13 @@ class _ProspectSheet extends StatelessWidget {
                 border: Border.all(color: Colors.white.withOpacity(0.3)),
               ),
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.72,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Header
@@ -2172,6 +2177,8 @@ class _ProspectSheet extends StatelessWidget {
                     ),
                   ),
                 ],
+                  ),
+                ),
               ),
             ),
           ),
