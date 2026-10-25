@@ -18,6 +18,27 @@ class FrenchRegistryService {
   // Retourne les codes NAF applicables ou null si cette activite n'est
   // pas traduisible de maniere fiable en NAF.
   static String? nafCodesFor(String search) {
+    // Plusieurs puces de secteurs peuvent etre combinees dans la meme recherche.
+    // Ex. 'CHR, GMS' doit rechercher les deux familles NAF, pas aucune.
+    final tokens = search.split(RegExp(r'[,;|]'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .take(6)
+        .toList();
+    if (tokens.isEmpty) return '';
+    final codes = <String>{};
+    var mapped = false;
+    for (final token in tokens) {
+      final value = _singleNafCodesFor(token);
+      if (value == null) continue;
+      mapped = true;
+      if (value.isEmpty) return '';
+      codes.addAll(value.split(',').map((e) => e.trim()));
+    }
+    return mapped ? codes.join(',') : null;
+  }
+
+  static String? _singleNafCodesFor(String search) {
     final query = search.trim().toLowerCase();
     // NAF/APE ne s'applique qu'aux entreprises francaises.
     if (query.isEmpty) return '';
