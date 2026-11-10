@@ -51,7 +51,9 @@ workflows:
           # absent from both this Android source and the present iOS source.
           # Keep them in GitHub for later alignment; do not claim they passed.
           flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos lib
-          mapfile -t test_files < <(
+          # macOS ships Bash 3.2 (no mapfile builtin).
+          test_files=()
+          while IFS= read -r file; do test_files+=("$file"); done < <(
             find test -type f -name '*_test.dart' \
               ! -name 'osm_failure_diagnostics_test.dart' \
               ! -name 'osm_overpass_body_check_test.dart' \
