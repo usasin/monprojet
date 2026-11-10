@@ -31,6 +31,9 @@ class OSMPlace {
   final String? instagram;
   final String? facebook;
   final String? linkedin;
+  final String? source;
+  final String? siret;
+  final String? nafCode;
 
   OSMPlace({
     required this.id,
@@ -46,6 +49,9 @@ class OSMPlace {
     this.instagram,
     this.facebook,
     this.linkedin,
+    this.source,
+    this.siret,
+    this.nafCode,
   });
 }
 
@@ -604,6 +610,90 @@ out center tags qt 500;
     final t = token.trim().toLowerCase();
     if (t.isEmpty) return const [];
 
+    // --- Secteurs de prospection internationale (OSM) ---
+    // Ces mots-cles sont independants de la langue de l'interface.
+    // Aucun code NAF n'est utilise hors de France.
+    if (t == 'chr' || t == 'horeca' || t.contains('hotellerie restauration') ||
+        t.contains('hôtellerie restauration') || t == 'cafe hotel restaurant' ||
+        t == 'cafes hotels restaurants') {
+      return const [
+        '["amenity"="restaurant"]',
+        '["amenity"="fast_food"]',
+        '["amenity"="cafe"]',
+        '["amenity"="bar"]',
+        '["amenity"="pub"]',
+        '["tourism"="hotel"]',
+        '["tourism"="motel"]',
+        '["tourism"="guest_house"]',
+      ];
+    }
+
+    if (t == 'gms' || t == 'grande distribution' ||
+        t.contains('grande surface') || t.contains('grandes surfaces') ||
+        t.contains('retail chain') || t.contains('hypermarket') ||
+        t.contains('hypermarché') || t.contains('hypermarche')) {
+      return const [
+        '["shop"="supermarket"]',
+        '["shop"="department_store"]',
+        '["shop"="wholesale"]',
+      ];
+    }
+
+    // Une parapharmacie n'est pas toujours cartographiee avec un tag unique.
+    // On inclut des commerces apparentes et les pharmacies a qualifier.
+    if (t.contains('parapharm') || t.contains('drugstore') ||
+        t == 'chemist' || t.contains('medical supply')) {
+      return const [
+        '["shop"="chemist"]',
+        '["shop"="cosmetics"]',
+        '["shop"="medical_supply"]',
+        '["amenity"="pharmacy"]',
+      ];
+    }
+
+    // Recherche d'etablissements DANS une zone d'activites (pas de
+    // polygones landuse qui representent la zone elle-meme).
+    if (t.contains("zone d'activit") || t.contains('zone d’activit') ||
+        t.contains('zone industrielle') || t.contains('zone industriel') ||
+        t.contains('zone commerciale') || t.contains("parc d'activit") ||
+        t.contains('parc d’activit') || t.contains('business park') ||
+        t.contains('industrial park')) {
+      return const [
+        r'["office"]["name"]',
+        r'["craft"]["name"]',
+        r'["industrial"]["name"]',
+        r'["shop"]["name"]',
+        r'["man_made"="works"]["name"]',
+        r'["building"~"^(industrial|warehouse)$"]["name"]',
+      ];
+    }
+
+    if (t.contains('logistique') || t.contains('logistics') ||
+        t.contains('entrepôt') || t.contains('entrepot') ||
+        t.contains('warehouse') || t.contains('transport routier') ||
+        t == 'transport') {
+      return const [
+        r'["industrial"~"^(warehouse|logistics)$"]["name"]',
+        r'["building"="warehouse"]["name"]',
+        r'["office"="logistics"]["name"]',
+        r'["office"="transport"]["name"]',
+        r'["man_made"="works"]["name"]',
+      ];
+    }
+
+    // OSM n'a pas un champ d'effectif fiable. Ces filtres identifient
+    // des etablissements a qualifier, pas leur taille commerciale.
+    if (t == 'tpe' || t == 'pme' || t == 'tpe/pme' || t == 'sme' ||
+        t.contains('small business') || t.contains('grands comptes') ||
+        t.contains('grand compte') || t.contains('large enterprise')) {
+      return const [
+        r'["office"]["name"]',
+        r'["craft"]["name"]',
+        r'["industrial"]["name"]',
+        r'["shop"]["name"]',
+      ];
+    }
+
     // ---- Coiffure ----
     if (t.contains('coif') ||
         t.contains('barbier') ||
@@ -819,6 +909,16 @@ out center tags qt 500;
     }
     if (amenity == 'restaurant' || amenity == 'fast_food' || amenity == 'cafe') {
       return isFr ? 'Restauration' : 'Food & drink';
+    }
+    if (amenity == 'bar' || amenity == 'pub') {
+      return isFr ? 'Bar / Café' : 'Bar / Pub';
+    }
+    if (shop == 'supermarket' || shop == 'department_store' ||
+        shop == 'wholesale') {
+      return isFr ? 'Distribution' : 'Retail / Wholesale';
+    }
+    if (shop == 'chemist' || shop == 'medical_supply') {
+      return isFr ? 'Parapharmacie / Santé' : 'Health / Personal care';
     }
     if (tourism == 'hotel' || tourism == 'motel' || tourism == 'guest_house') {
       return isFr ? 'Hôtel' : 'Hotel';

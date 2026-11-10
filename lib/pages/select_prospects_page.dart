@@ -25,6 +25,19 @@ import '../services/ad_config.dart';
 import '../services/ad_service.dart';
 import '../services/usage_meter.dart';
 import '../services/osm_search_service.dart';
+import '../services/directory_online_search.dart';
+import '../services/prospecto_directory_api.dart';
+import '../directory/directory_models.dart';
+import '../directory/directory_service.dart';
+import '../directory/directory_page.dart';
+import '../directory/directory_selection.dart';
+import '../directory/directory_territories.dart';
+import '../directory/prospect_search_form.dart';
+import '../services/prospect_location_service.dart';
+import '../widgets/prospect_location_chooser.dart';
+import '../directory/directory_search_feedback.dart';
+import '../widgets/osm_search_feedback.dart';
+import '../widgets/prospect_info_chip.dart';
 import '../screens/credits_paywall_page.dart';
 import '../widgets/brand_background.dart';
 import '../ui/bling.dart';
@@ -108,11 +121,19 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
   bool              _showOnlyChosen  = false;
 
   // ── Recherche OSM
+  static const List<int> _searchRadiiMeters = [500, 1000, 2000, 5000, 10000];
   int  _radiusIndex  = 1;
   static const List<String> _quickKeywordsFr = [
     'restaurant',
+    'CHR',
+    'GMS',
+    'parapharmacie',
+    'zone d’activités',
+    'TPE/PME',
+    'industrie',
+    'logistique',
     'coiffeur',
-    'B2B',
+    'grossiste boissons',
     'hôtel',
     'pharmacie',
     'garage',
@@ -120,8 +141,15 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
   ];
   static const List<String> _quickKeywordsEn = [
     'restaurant',
+    'HORECA',
+    'GMS',
+    'chemist',
+    'business park',
+    'SME',
+    'industry',
+    'logistics',
     'hairdresser',
-    'B2B',
+    'beverage wholesaler',
     'hotel',
     'pharmacy',
     'garage',
@@ -144,7 +172,18 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
   int  _freeToursUsed = 0;
 
   // ── OSM
-  final _osm = OSMSearchService();
+  final _directory = DirectoryService.instance;
+  final _onlineSearch = DirectoryOnlineSearch();
+  Map<String, DirectoryRecord> _directoryDetails = {};
+  String _directoryNotice = '';
+  String _searchFeedback = '';
+  bool _searchFeedbackIsError = false;
+  final _locations = ProspectLocationService();
+  final _deviceLocation = ProspectDeviceLocation();
+  ProspectSearchLocation? _searchLocation;
+  List<String> _installedTerritories = [];
+  String? _selectedTerritory;
+  bool _locating = false;
 
   // ── Animations
   late final AnimationController _fabAnim = AnimationController(
@@ -156,12 +195,16 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
 
   // ── Section expansion (accordéon)
   bool _searchExpanded = true;
+  bool _targetingExpanded = false;
+  final GlobalKey _targetingStepKey = GlobalKey();
   bool _seedApplied = false, _routeArgsRead = false;
   List<String> _seedIds = [];
 
   @override
   void initState() {
     super.initState();
+    _streetCtrl.addListener(_invalidateSearchLocation);
+    unawaited(_reloadSearchTerritories());
     _refreshEntitlements();
     WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _loadForDate(); });
     _fabAnim.forward();
@@ -268,7 +311,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
     }
     _bannerAd = BannerAd(
       adUnitId: AdConfig.bannerHome,
-      request: AdService.instance.adRequest,
+      request: const AdRequest(),
       size: AdSize.banner,
       listener: BannerAdListener(
         onAdLoaded: (_) {
@@ -324,6 +367,9 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
     final int token = ++_fetchToken;
     setState(() {
       _loading = true;
+      _directoryNotice = '';
+      _directoryDetails = {};
+      _searchFeedback = '';
       _allOptions.clear();
       _options.clear();
       _chosen.clear();
@@ -476,13 +522,136 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
 
   // ════════════ Recherche OSM ════════════
 
+  void _invalidateSearchLocation() {
+    if (_searchLocation != null && _streetCtrl.text.trim() != _searchLocation!.label) {
+      setState(() {
+        _searchLocation = null;
+        _targetingExpanded = false;
+        _searchExpanded = true;
+      });
+    }
+  }
+
+  Future<void> _reloadSearchTerritories() async {
+    if (!_directory.supported) return;
+    try {
+      final packs = await _directory.backend.installed();
+      if (!mounted) return;
+      setState(() {
+        _installedTerritories = packs.map(directoryTerritoryTitle).toSet().toList()..sort();
+        if (!_installedTerritories.contains(_selectedTerritory)) _selectedTerritory = null;
+      });
+    } catch (_) {
+      // A local pack issue must not prevent choosing an address or searching online.
+    }
+  }
+
+  void _applySearchLocation(ProspectSearchLocation location) {
+    setState(() {
+      _searchLocation = location;
+      _streetCtrl.text = location.label;
+      _streetCtrl.selection = TextSelection.collapsed(offset: _streetCtrl.text.length);
+      _searchFeedback = '';
+      // Progressive UI: validate the zone, close step 2, reveal step 3.
+      _searchExpanded = false;
+      _targetingExpanded = true;
+    });
+    // Guide the eye to the next step after geocoding or GPS succeeds.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final target = _targetingStepKey.currentContext;
+      if (target != null) {
+        Scrollable.ensureVisible(target,
+            duration: const Duration(milliseconds: 360),
+            curve: Curves.easeInOutCubic, alignment: 0.12);
+      }
+    });
+  }
+
+  Future<bool> _chooseSearchLocation() async {
+    if (_loading || _locating) return false;
+    final query = _streetCtrl.text.trim();
+    if (query.length < 3) {
+      _showToast('Saisissez une adresse, une ville ou un code postal, ou utilisez votre position.', isError: true);
+      return false;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() => _locating = true);
+    try {
+      final options = await _locations.search(query);
+      if (!mounted) return false;
+      if (options.isEmpty) {
+        _showToast('Aucun lieu trouvé. Précisez la rue avec la ville ou le code postal.', isError: true);
+        return false;
+      }
+      final choice = await chooseProspectLocation(context, options,
+        isFrench: context.locale.languageCode.startsWith('fr'));
+      if (!mounted || choice == null) return false;
+      _applySearchLocation(choice);
+      return true;
+    } catch (error) {
+      if (mounted) _showToast('$error', isError: true);
+      return false;
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _useSearchPosition() async {
+    if (_loading || _locating) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _locating = true);
+    try {
+      final location = await _deviceLocation.current();
+      if (mounted) _applySearchLocation(location);
+    } catch (_) {
+      if (mounted) _showToast('Position indisponible ou refusée. Vous pouvez choisir une adresse ou un code postal.', isError: true);
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _openDirectory() async {
+    final choice = await Navigator.of(context).push<DirectoryUseSelection>(
+      MaterialPageRoute(builder: (_) => const DirectoryPage()),
+    );
+    if (!mounted) return;
+    await _reloadSearchTerritories();
+    if (!mounted || choice == null) return;
+    setState(() {
+      _selectedTerritory = directoryTerritoryTitle(choice.pack);
+      _searchLocation = null;
+      _streetCtrl.clear();
+      _allOptions.removeWhere((p) => !_chosen.contains(p.id));
+      _directoryDetails.removeWhere((id, _) => !_chosen.contains(id));
+      _rebuildOptions(resetCount: true);
+      _searchFeedback = '';
+      _searchExpanded = true;
+      _targetingExpanded = false;
+    });
+    final seed = choice.seed;
+    if (seed != null) {
+      _applySearchLocation(ProspectSearchLocation(label: seed.address,
+        lat: seed.lat, lon: seed.lon, kind: 'sample'));
+      setState(() {
+        if (_categoryCtrl.text.trim().isEmpty) _categoryCtrl.text = seed.query;
+        _radiusIndex = 3;
+      });
+    }
+    // Loading a territory only prepares the form. The user chooses where and
+    // which activities to search before requesting any establishments.
+  }
+
   Future<void> _fetchByZone() async {
-    if (_loading) return;
+    if (_loading || _locating) return;
+    if (_searchLocation == null && !await _chooseSearchLocation()) return;
+    if (!mounted || _searchLocation == null) return;
+    final center = _searchLocation!;
     final street = _streetCtrl.text.trim();
     if (street.isEmpty) return;
-    final q = _categoryCtrl.text.trim();
-    final radius = _radiusIndex == 0 ? 500 : (_radiusIndex == 1 ? 1000 : 2000);
-    final key = '${street.toLowerCase()}|${q.toLowerCase()}|$radius';
+    final q = prospectActivityTokens(_categoryCtrl.text).join(', ');
+    final radius = _searchRadiiMeters[_radiusIndex];
+    final key = '${center.lat}|${center.lon}|${q.toLowerCase()}|$radius';
     final now = DateTime.now();
     if (_lastSearchAt != null &&
         _lastSearchKey == key &&
@@ -492,9 +661,19 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
     _lastSearchAt = now;
     _lastSearchKey = key;
     final int token = ++_fetchToken;
+    final selectedBeforeSearch = _allOptions
+        .where((prospect) => _chosen.contains(prospect.id))
+        .toList(growable: false);
+    final selectedDetailsBeforeSearch = <String, DirectoryRecord>{
+      for (final entry in _directoryDetails.entries)
+        if (_chosen.contains(entry.key)) entry.key: entry.value,
+    };
 
     setState(() {
       _loading = true;
+      _directoryNotice = '';
+      _directoryDetails = {};
+      _searchFeedback = '';
       _allOptions.clear();
       _options.clear();
       _loadedCount = 0;
@@ -502,20 +681,30 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
 
     try {
       final languageCode = context.locale.languageCode;
-      final geo = await _osm.geocode(
-        street,
-        languageCode: languageCode,
-      );
+      final geo = OSMGeoPoint(center.lat, center.lon);
       if (!mounted || token != _fetchToken) return;
 
-      final results = await _osm.searchNearby(
-        lat: geo.lat,
-        lng: geo.lng,
-        query: q,
-        radiusMeters: radius,
-        languageCode: languageCode,
+      DirectoryOnlineSearchResult? onlineResult;
+      final directoryResult = await _directory.search(
+        lat: geo.lat, lon: geo.lng, query: q, radius: radius,
+        fallback: () async {
+          final result = await _onlineSearch.searchDetailed(
+            lat: geo.lat, lng: geo.lng, query: q,
+            radiusMeters: radius, languageCode: languageCode,
+          );
+          onlineResult = result;
+          return result.places;
+        },
       );
       if (!mounted || token != _fetchToken) return;
+      final results = directoryResult.places;
+      _directoryDetails = Map<String, DirectoryRecord>.from(directoryResult.details);
+      _directoryNotice = [
+        if (!directoryResult.networkUnavailable) directoryResult.notice,
+        if (onlineResult?.notice.isNotEmpty == true) onlineResult!.notice,
+        if (onlineResult?.failedSources.isNotEmpty == true)
+          'Source indisponible : ${onlineResult!.failedSources.join(', ')}. Résultats en ligne partiels.',
+      ].where((text) => text.isNotEmpty).join(' ');
 
       // Construit le résultat hors setState : on évite de muter la liste
       // visible pendant le parsing et on protège l'écran d'une ancienne
@@ -542,18 +731,30 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
             instagram: r.instagram,
             facebook: r.facebook,
             linkedin: r.linkedin,
+            source: r.source,
+            siret: r.siret,
+            nafCode: r.nafCode,
           ),
       ];
 
-      // Les prospects déjà cochés doivent rester disponibles même s'ils ne
-      // font pas partie de la nouvelle recherche. Le Set évite le précédent
-      // scan O(n²) sur les listes volumineuses.
-      final resultIds = nextOptions.map((p) => p.id).toSet();
-      final missingIds = _chosen.where((id) => !resultIds.contains(id)).toList();
-      if (missingIds.isNotEmpty) {
-        final existing = await FirestoreService().fetchProspectsByIds(missingIds);
+      // Les nouvelles sélections et les champs privés de l'écran priment sur
+      // Firestore, où ces prospects ne sont pas forcément encore enregistrés.
+      if (_chosen.isNotEmpty) {
+        final existing = await loadSelectedDirectoryProspects(
+          selectedIds: _chosen,
+          inMemory: selectedBeforeSearch,
+          loadMissing: FirestoreService().fetchProspectsByIds,
+        );
         if (!mounted || token != _fetchToken) return;
-        nextOptions.addAll(existing);
+        final selection = preserveDirectorySelection(nextOptions, existing);
+        for (final entry in selectedDetailsBeforeSearch.entries) {
+          _directoryDetails.putIfAbsent(entry.key, () => entry.value);
+        }
+        for (final alias in selection.aliases.entries) {
+          final details = _directoryDetails[alias.key];
+          if (details != null) _directoryDetails[alias.value] = details;
+        }
+        nextOptions..clear()..addAll(selection.prospects);
       }
 
       _allOptions
@@ -562,45 +763,46 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
       _sortByNumber();
       _rebuildOptions(resetCount: true);
 
-      final total = _allOptions.length;
+      final total = results.length;
       if (total > 0) _listAnim.forward(from: 0);
 
       // On garde la recherche ouverte quand il n'y a aucun résultat afin que
       // l'utilisateur puisse corriger l'adresse, élargir le rayon ou vider la catégorie.
-      setState(() => _searchExpanded = total == 0);
+      setState(() {
+        _searchExpanded = total == 0;
+        _targetingExpanded = total == 0;
+      });
 
       final isFr = context.locale.languageCode.startsWith('fr');
       final message = total == 0
           ? (isFr
-              ? 'Aucun prospect trouvé. Vérifiez l’adresse, essayez un rayon plus large ou laissez la catégorie vide.'
+              ? 'Aucun résultat dans les sources disponibles. Vérifiez l’adresse, essayez un rayon plus large ou laissez la catégorie vide.'
               : 'No prospects found. Check the address, try a wider radius or leave the category empty.')
           : (isFr
               ? '$total ${total == 1 ? 'résultat trouvé' : 'résultats trouvés'}'
               : '$total ${total == 1 ? 'result found' : 'results found'}');
       if (mounted && token == _fetchToken) {
+        setState(() {
+          _searchFeedback = directoryResult.networkUnavailable
+              ? directoryResult.notice : total == 0 ? message : '';
+          _searchFeedbackIsError = directoryResult.networkUnavailable;
+        });
         _showToast(message, isError: total == 0);
       }
     } catch (e) {
       if (!mounted || token != _fetchToken) return;
-      final msg = e.toString();
       final isFr = context.locale.languageCode.startsWith('fr');
-      String friendly = isFr
-          ? 'Recherche impossible. Réessaie dans quelques secondes.'
-          : 'Search unavailable. Try again in a few seconds.';
-      if (msg.contains('HTTP 429')) {
-        friendly = isFr
-            ? 'Trop de requêtes (OSM). Attends 10 secondes.'
-            : 'Too many OSM requests. Wait 10 seconds.';
-      } else if (msg.contains('HTTP 5') || msg.contains('timeout')) {
-        friendly = isFr
-            ? 'Serveur OSM occupé. Réessaie dans 10 secondes.'
-            : 'The OSM server is busy. Try again in 10 seconds.';
-      } else if (msg.toLowerCase().contains('géocodage') ||
-          msg.toLowerCase().contains('geocoding')) {
-        friendly = isFr
-            ? 'Adresse introuvable. Ajoute la ville, le code postal et le pays.'
-            : 'Address not found. Add the city, postcode and country.';
-      }
+      final friendly = directorySearchFailureMessage(e, isFrench: isFr);
+      setState(() {
+        _allOptions..clear()..addAll(selectedBeforeSearch);
+        _directoryDetails = selectedDetailsBeforeSearch;
+        _sortByNumber();
+        _rebuildOptions(resetCount: true);
+        _searchFeedback = friendly;
+        _searchFeedbackIsError = true;
+        _searchExpanded = true;
+        _targetingExpanded = true;
+      });
       _showToast(friendly, isError: true);
     } finally {
       // Une ancienne requête ne doit jamais éteindre le loader d'une nouvelle.
@@ -769,6 +971,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
       backgroundColor: Colors.transparent,
       builder: (ctx) => _ProspectSheet(
         prospect: p,
+        directoryRecord: _directoryDetails[p.id],
         isChosen: _chosen.contains(p.id),
         onToggle: () async {
           await _onToggleProspect(p, !_chosen.contains(p.id));
@@ -830,11 +1033,13 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
                                 const SizedBox(height: 12),
                               ],
 
-                              // ── Étape 1 : Date
+                              // ── 1. Planifier : today is already selected by default.
                               _StepCard(
                                 step: 1,
-                                title: 'Planifier la date',
+                                title: context.locale.languageCode.startsWith('fr')
+                                    ? 'Planifier la date' : 'Plan the date',
                                 icon: Icons.calendar_today_rounded,
+                                completed: true,
                                 child: _DatePickerRow(
                                   date: _selectedDate,
                                   onTap: _pickDate,
@@ -842,37 +1047,90 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
                               ),
                               const SizedBox(height: 10),
 
-                              // ── Étape 2 : Recherche (accordéon)
+                              // ── 2. Zone : no directory, pack or source details.
                               _StepCard(
                                 step: 2,
-                                title: 'Zone de prospection',
+                                title: context.locale.languageCode.startsWith('fr')
+                                    ? 'Zone de prospection' : 'Prospecting area',
                                 icon: Icons.radar_rounded,
+                                completed: _searchLocation != null,
+                                subtitle: !_searchExpanded ? _searchLocation?.label : null,
                                 trailing: _CollapseToggle(
                                   expanded: _searchExpanded,
-                                  onToggle: () => setState(() => _searchExpanded = !_searchExpanded),
+                                  onToggle: () => setState(
+                                      () => _searchExpanded = !_searchExpanded),
                                 ),
                                 child: AnimatedSize(
-                                  duration: const Duration(milliseconds: 280),
-                                  curve: Curves.easeInOut,
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeInOutCubic,
                                   child: _searchExpanded
-                                      ? _SearchSection(
-                                    streetCtrl: _streetCtrl,
-                                    categoryCtrl: _categoryCtrl,
-                                    quickKeywords:
-                                        context.locale.languageCode.startsWith('fr')
-                                            ? _quickKeywordsFr
-                                            : _quickKeywordsEn,
-                                    radiusIndex: _radiusIndex,
-                                    onRadiusChanged: (v) => setState(() => _radiusIndex = v),
-                                    onKeywordTap: _appendKeyword,
-                                    onSearch: _fetchByZone,
-                                    onOptimize: _optimizeChosenOrder,
-                                    loading: _loading,
-                                  )
+                                      ? _guidedSearchForm(showZone: true, showTargeting: false)
                                       : const SizedBox.shrink(),
                                 ),
                               ),
                               const SizedBox(height: 10),
+
+                              // ── 3. Activity + radius remain optional; grey until zone verified.
+                              _StepCard(
+                                key: _targetingStepKey,
+                                step: 3,
+                                title: context.locale.languageCode.startsWith('fr')
+                                    ? 'Activités et rayon' : 'Business types & radius',
+                                icon: Icons.tune_rounded,
+                                enabled: _searchLocation != null,
+                                subtitle: _searchLocation == null
+                                    ? (context.locale.languageCode.startsWith('fr')
+                                        ? 'Choisissez une zone pour continuer'
+                                        : 'Choose an area to continue')
+                                    : (!_targetingExpanded
+                                        ? _targetingSummary(context.locale.languageCode.startsWith('fr'))
+                                        : null),
+                                trailing: _searchLocation == null
+                                    ? const Icon(Icons.lock_outline_rounded,
+                                        size: 19, color: Colors.grey)
+                                    : _CollapseToggle(
+                                        expanded: _targetingExpanded,
+                                        onToggle: () => setState(() =>
+                                            _targetingExpanded = !_targetingExpanded),
+                                      ),
+                                child: AnimatedSize(
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeInOutCubic,
+                                  child: _searchLocation != null && _targetingExpanded
+                                      ? _guidedSearchForm(showZone: false, showTargeting: true)
+                                      : const SizedBox.shrink(),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+
+                              if (_directoryNotice.isNotEmpty &&
+                                  (_directoryNotice.toLowerCase().contains('indisponible') ||
+                                   _directoryNotice.toLowerCase().contains('incomplet') ||
+                                   _directoryNotice.toLowerCase().contains('source indisponible'))) Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: ProspectInfoChip(
+                                  key: const Key('search-sources-info'),
+                                  label: _directoryNotice.toLowerCase().contains('partiel') ||
+                                      _directoryNotice.toLowerCase().contains('indisponible')
+                                      ? (context.locale.languageCode.startsWith('fr')
+                                          ? 'Résultats partiels' : 'Partial results')
+                                      : (context.locale.languageCode.startsWith('fr')
+                                          ? 'Sources des résultats' : 'Result sources'),
+                                  icon: Icons.info_outline_rounded,
+                                  tone: _directoryNotice.toLowerCase().contains('partiel') ||
+                                      _directoryNotice.toLowerCase().contains('indisponible')
+                                      ? ProspectInfoTone.caution : ProspectInfoTone.online,
+                                  details: prospectSearchSourceExplanation(
+                                    _directoryNotice,
+                                    isFrench: context.locale.languageCode.startsWith('fr'),
+                                  ),
+                                ),
+                              ),
+                              if (_searchFeedback.isNotEmpty) OSMSearchFeedback(
+                                message: _searchFeedback,
+                                isError: _searchFeedbackIsError,
+                                onRetry: _searchFeedbackIsError ? _fetchByZone : null,
+                              ),
 
                               if (_smartRouteMetadata != null && _chosenOrder.isNotEmpty) ...[
                                 _SavedSmartRouteCard(
@@ -883,14 +1141,16 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
                               ],
 
                               // ── Placeholder vide
-                              if (!_loading && _allOptions.isEmpty)
+                              if (!_loading && _allOptions.isEmpty && _searchFeedback.isEmpty)
                                 _EmptyState(onSearch: _fetchByZone),
 
-                              // ── Étape 3 : Résultats
+                              // ── Étape 4 : Sélection des clients (après activité et rayon)
                               if (!_loading && _allOptions.isNotEmpty) ...[
                                 _StepCard(
-                                  step: 3,
-                                  title: 'Sélectionner les clients',
+                                  step: 4,
+                                  title: context.locale.languageCode.startsWith('fr')
+                                      ? 'Sélectionner les clients'
+                                      : 'Select customers',
                                   icon: Icons.checklist_rounded,
                                   child: _ResultsToolbar(
                                     pageSize: _pageSize,
@@ -1021,8 +1281,6 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
 
   Widget _buildBottomBar(ThemeData theme) {
     final selected = _chosenOrder.length;
-    final limit    = _isPremium ? null : UsageMeter.defaultFreeMaxProspectsPerTour;
-
     return SafeArea(
       top: false,
       child: Column(
@@ -1055,7 +1313,7 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
                 child: Row(
                   children: [
                     // Compteur sélection
-                    _SelectionBadge(count: selected, limit: limit, dirty: _dirty),
+                    _SelectionBadge(count: selected, dirty: _dirty),
                     const SizedBox(width: 12),
                     // Bouton enregistrer
                     Expanded(
@@ -1095,13 +1353,51 @@ class _SelectProspectsPageState extends State<SelectProspectsPage>
     );
   }
 
+  String _targetingSummary(bool isFrench) {
+    final n = prospectActivityTokens(_categoryCtrl.text).length;
+    const distances = ['500 m', '1 km', '2 km', '5 km', '10 km'];
+    final activityLabel = isFrench
+        ? (n == 0 ? 'Toutes activités' : n == 1 ? '1 activité' : '$n activités')
+        : (n == 0 ? 'All types' : n == 1 ? '1 type' : '$n types');
+    return '$activityLabel · ${distances[_radiusIndex]}';
+  }
+
+  // The two screens share the exact same controllers and search callbacks.
+  // This only splits presentation; no search engine or local/online logic changes.
+  Widget _guidedSearchForm({required bool showZone, required bool showTargeting}) {
+    return ProspectSearchForm(
+      showZone: showZone,
+      showTargeting: showTargeting,
+      addressController: _streetCtrl,
+      activityController: _categoryCtrl,
+      ownDirectory: ProspectoDirectoryApi.configuredUrl.isNotEmpty,
+      quickActivities: (context.locale.languageCode.startsWith('fr')
+              ? _quickKeywordsFr : _quickKeywordsEn)
+          .map((item) => ProspectoDirectoryApi.configuredUrl.isEmpty
+              ? item : item == 'chantier' ? 'artisan'
+                  : item == 'construction' ? 'craftsman' : item).toList(),
+      radiusIndex: _radiusIndex,
+      onRadiusChanged: (v) => setState(() => _radiusIndex = v),
+      onActivityToggle: _appendKeyword,
+      onSearch: _fetchByZone,
+      onOptimize: _optimizeChosenOrder,
+      busy: _loading,
+      locating: _locating,
+      isFrench: context.locale.languageCode.startsWith('fr'),
+      offlineSupported: _directory.supported,
+      installedTerritories: _installedTerritories,
+      selectedTerritory: _selectedTerritory,
+      selectedLocation: _searchLocation?.label,
+      onChooseAddress: _chooseSearchLocation,
+      onUsePosition: _useSearchPosition,
+      onManageTerritories: _openDirectory,
+    );
+  }
+
   void _appendKeyword(String kw) {
     final normKw = kw.trim();
     if (normKw.isEmpty) return;
-    final cur   = _categoryCtrl.text.trim();
-    final parts = cur.split(RegExp(r'[,;|]')).map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toList();
-    if (parts.contains(normKw.toLowerCase())) return;
-    final next = cur.isEmpty ? normKw : '$cur, $normKw';
+    final next = toggleProspectActivity(_categoryCtrl.text, normKw);
     setState(() {
       _categoryCtrl.text = next;
       _categoryCtrl.selection = TextSelection.collapsed(offset: _categoryCtrl.text.length);
@@ -1121,10 +1417,14 @@ class _StepCard extends StatelessWidget {
   final IconData icon;
   final Widget  child;
   final Widget? trailing;
+  final bool enabled, completed;
+  final String? subtitle;
 
   const _StepCard({
+    super.key,
     required this.step, required this.title, required this.icon,
     required this.child, this.trailing,
+    this.enabled = true, this.completed = false, this.subtitle,
   });
 
   @override
@@ -1136,7 +1436,9 @@ class _StepCard extends StatelessWidget {
         filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
         child: Container(
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.07) : Colors.white.withOpacity(0.62),
+            color: !enabled
+                ? (isDark ? Colors.white.withOpacity(0.035) : Colors.grey.shade200.withOpacity(0.65))
+                : (isDark ? Colors.white.withOpacity(0.07) : Colors.white.withOpacity(0.62)),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: isDark ? Colors.white.withOpacity(0.13) : Colors.white.withOpacity(0.75)),
             boxShadow: [
@@ -1150,19 +1452,34 @@ class _StepCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _StepPill(step: step),
+                    _StepPill(step: step, enabled: enabled, completed: completed),
                     const SizedBox(width: 10),
-                    Icon(icon, size: 18, color: _Palette.indigo),
+                    Icon(icon, size: 18,
+                      color: enabled ? _Palette.indigo : Colors.grey),
                     const SizedBox(width: 8),
                     Expanded(
                       child: LText(title, style: TextStyle(
                         fontWeight: FontWeight.w800, fontSize: 15,
-                        color: isDark ? _Palette.onDark : _Palette.onLight,
+                        color: !enabled ? Colors.grey : (isDark ? _Palette.onDark : _Palette.onLight),
                       )),
                     ),
+                    if (completed) ...[
+                      const Icon(Icons.check_circle_rounded,
+                        color: ProspectoColors.green, size: 19),
+                      const SizedBox(width: 6),
+                    ],
                     if (trailing != null) trailing!,
                   ],
                 ),
+                if (subtitle != null && subtitle!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 44, top: 4),
+                    child: Text(subtitle!, maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: enabled
+                          ? Theme.of(context).colorScheme.onSurfaceVariant
+                          : Colors.grey)),
+                  ),
                 child,
               ],
             ),
@@ -1176,16 +1493,19 @@ class _StepCard extends StatelessWidget {
 // ── Pill numéro d'étape
 class _StepPill extends StatelessWidget {
   final int step;
-  const _StepPill({required this.step});
+  final bool enabled, completed;
+  const _StepPill({required this.step,
+    this.enabled = true, this.completed = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: 26, height: 26,
       decoration: BoxDecoration(
-        gradient: _Palette.primaryGrad,
+        gradient: enabled ? _Palette.primaryGrad : null,
+        color: enabled ? null : Colors.grey.shade400,
         borderRadius: BorderRadius.circular(8),
-        boxShadow: [BoxShadow(color: _Palette.indigo.withOpacity(0.35), blurRadius: 8, offset: const Offset(0, 4))],
+        boxShadow: enabled ? [BoxShadow(color: _Palette.indigo.withOpacity(0.25), blurRadius: 8, offset: const Offset(0, 4))] : const [],
       ),
       alignment: Alignment.center,
       child: LText('$step', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
@@ -1362,13 +1682,13 @@ class _FreeBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const LText(
-                  'Version gratuite · avec publicités',
+                  'Version gratuite',
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 LText(
-                  '$maxProspects clients max · $remaining/$maxTours tournée restante',
+                  '$maxProspects clients max · $remaining tournée${remaining > 1 ? 's' : ''} dispo',
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11.5),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1433,155 +1753,6 @@ class _DatePickerRow extends StatelessWidget {
   }
 }
 
-// ── Section recherche
-class _SearchSection extends StatelessWidget {
-  final TextEditingController streetCtrl, categoryCtrl;
-  final List<String> quickKeywords;
-  final int radiusIndex;
-  final ValueChanged<int> onRadiusChanged;
-  final ValueChanged<String> onKeywordTap;
-  final VoidCallback onSearch, onOptimize;
-  final bool loading;
-
-  const _SearchSection({
-    required this.streetCtrl, required this.categoryCtrl,
-    required this.quickKeywords, required this.radiusIndex,
-    required this.onRadiusChanged, required this.onKeywordTap,
-    required this.onSearch, required this.onOptimize, required this.loading,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final radiusLabels = ['500 m', '1 km', '2 km'];
-    return Padding(
-      padding: const EdgeInsets.only(top: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Adresse
-          _GlassTextField(
-            controller: streetCtrl,
-            label: context.locale.languageCode.startsWith('fr')
-                ? 'Adresse complète, ville, pays…'
-                : 'Full address, city, country…',
-            icon: Icons.location_on_rounded,
-          ),
-          const SizedBox(height: 10),
-          // Activité
-          _GlassTextField(
-            controller: categoryCtrl,
-            label: context.locale.languageCode.startsWith('fr')
-                ? 'Activité, mots-clés (ex. restaurant, B2B…)'
-                : 'Business type or keywords (e.g. restaurant, B2B…)',
-            icon: Icons.storefront_rounded,
-          ),
-          const SizedBox(height: 10),
-          // Quick chips
-          Wrap(
-            spacing: 6, runSpacing: 6,
-            children: quickKeywords.map((kw) {
-              return GestureDetector(
-                onTap: () => onKeywordTap(kw),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _Palette.indigo.withOpacity(0.10),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _Palette.indigo.withOpacity(0.22)),
-                  ),
-                  child: LText(
-                    kw[0].toUpperCase() + kw.substring(1),
-                    style: TextStyle(color: _Palette.indigo, fontWeight: FontWeight.w600, fontSize: 12),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 14),
-          // Rayon slider
-          Row(
-            children: [
-              Icon(Icons.radio_button_checked_rounded, color: _Palette.indigo, size: 16),
-              const SizedBox(width: 8),
-              Flexible(
-                child: LText(
-                  'Rayon : ${radiusLabels[radiusIndex]}',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-          SliderTheme(
-            data: SliderThemeData(
-              trackHeight: 5,
-              activeTrackColor: _Palette.indigo,
-              inactiveTrackColor: _Palette.indigo.withOpacity(0.18),
-              thumbColor: Colors.white,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
-              overlayColor: _Palette.indigo.withOpacity(0.15),
-            ),
-            child: Slider(
-              value: radiusIndex.toDouble(), min: 0, max: 2, divisions: 2,
-              label: radiusLabels[radiusIndex],
-              onChanged: (v) => onRadiusChanged(v.round()),
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Boutons action
-          Row(
-            children: [
-              Expanded(child: _GradientButton(label: 'Rechercher', icon: Icons.search_rounded, onTap: onSearch)),
-              const SizedBox(width: 10),
-              _GlassIconButton(
-                icon: Icons.auto_fix_high_rounded,
-                tooltip: 'Optimiser la tournée'.tr(),
-                onTap: onOptimize,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Text field glass
-class _GlassTextField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final IconData icon;
-  const _GlassTextField({required this.controller, required this.label, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return TextField(
-      controller: controller,
-      decoration: InputDecoration(
-        filled: true,
-        fillColor: isDark ? Colors.white.withOpacity(0.07) : Colors.white.withOpacity(0.70),
-        labelText: label,
-        labelStyle: TextStyle(fontSize: 13, color: isDark ? _Palette.onDarkSub : _Palette.onLightSub),
-        prefixIcon: Icon(icon, color: _Palette.indigo, size: 20),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: _Palette.indigo.withOpacity(0.18)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.35)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: _Palette.indigo, width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      ),
-    );
-  }
-}
-
 // ── Toolbar résultats
 class _ResultsToolbar extends StatelessWidget {
   final int pageSize, chosen, total;
@@ -1609,7 +1780,10 @@ class _ResultsToolbar extends StatelessWidget {
           Row(
             children: [
               LText(
-                '$chosen / $total',
+                // The toolbar counts discovered results; the footer counts selected customers.
+                Localizations.localeOf(context).languageCode.startsWith('fr')
+                    ? '$total résultat${total > 1 ? 's' : ''}'
+                    : '$total result${total == 1 ? '' : 's'}',
                 style: TextStyle(
                   fontWeight: FontWeight.w900, fontSize: 16,
                   foreground: Paint()..shader = _Palette.primaryGrad.createShader(const Rect.fromLTWH(0, 0, 80, 20)),
@@ -1751,9 +1925,8 @@ class _ActionPill extends StatelessWidget {
 // ── Badge sélection
 class _SelectionBadge extends StatelessWidget {
   final int count;
-  final int? limit;
   final bool dirty;
-  const _SelectionBadge({required this.count, this.limit, required this.dirty});
+  const _SelectionBadge({required this.count, required this.dirty});
 
   @override
   Widget build(BuildContext context) {
@@ -1773,7 +1946,9 @@ class _SelectionBadge extends StatelessWidget {
           Icon(Icons.checklist_rounded, size: 18, color: count > 0 ? Colors.white : Colors.black38),
           const SizedBox(width: 6),
           LText(
-            limit != null ? '$count/$limit' : '$count',
+            Localizations.localeOf(context).languageCode.startsWith('fr')
+                ? '$count coché${count > 1 ? 's' : ''}'
+                : '$count selected',
             style: TextStyle(
               color: count > 0 ? Colors.white : Colors.black38,
               fontWeight: FontWeight.w900, fontSize: 14,
@@ -1796,30 +1971,17 @@ class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.onSearch});
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      child: Column(
-        children: [
-          Container(
-            width: 72, height: 72,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [_Palette.sky.withOpacity(0.2), _Palette.violet.withOpacity(0.15)]),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(Icons.search_rounded, size: 36, color: _Palette.indigo.withOpacity(0.5)),
-          ),
-          const SizedBox(height: 16),
-          LText('Aucun résultat pour l\'instant',
-              style: TextStyle(fontWeight: FontWeight.w700, color: _Palette.onLightSub)),
-          const SizedBox(height: 6),
-          LText('Lance une recherche pour charger les établissements.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: _Palette.onLightSub.withOpacity(0.7))),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    child: ProspectInfoChip(
+      label: Localizations.localeOf(context).languageCode.startsWith('fr')
+          ? 'Prêt pour la recherche' : 'Ready to search',
+      icon: Icons.lightbulb_outline_rounded,
+      details: Localizations.localeOf(context).languageCode.startsWith('fr')
+          ? 'Choisissez un lieu, une ou plusieurs activités et un rayon, puis appuyez sur « Rechercher les professionnels ».'
+          : 'Choose a location, business types and a radius, then tap « Find businesses ». ',
+    ),
+  );
 }
 
 // ── Liste prospects avec animations
@@ -2038,6 +2200,7 @@ class _MiniChip extends StatelessWidget {
 // ── Sheet détail prospect
 class _ProspectSheet extends StatelessWidget {
   final Prospect prospect;
+  final DirectoryRecord? directoryRecord;
   final bool isChosen;
   final VoidCallback onToggle, onMaps;
   final VoidCallback? onPhone, onEmail, onWeb;
@@ -2045,7 +2208,7 @@ class _ProspectSheet extends StatelessWidget {
   const _ProspectSheet({
     required this.prospect, required this.isChosen,
     required this.onToggle, required this.onMaps,
-    this.onPhone, this.onEmail, this.onWeb,
+    this.onPhone, this.onEmail, this.onWeb, this.directoryRecord,
   });
 
   @override
@@ -2098,6 +2261,10 @@ class _ProspectSheet extends StatelessWidget {
                   if (prospect.category.isNotEmpty)
                     _MiniChip(label: prospect.category, color: _Palette.indigo),
                   const SizedBox(height: 16),
+                  if (directoryRecord != null) ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .32),
+                    child: SingleChildScrollView(child: DirectoryDetails(record: directoryRecord!)),
+                  ),
                   // Actions liens
                   Wrap(
                     spacing: 8, runSpacing: 8,
