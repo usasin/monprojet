@@ -7,7 +7,7 @@ root = Path(__file__).resolve().parents[1]
 info = plistlib.loads((root / 'ios/Runner/Info.plist').read_bytes())
 firebase = plistlib.loads((root / 'ios/Runner/GoogleService-Info.plist').read_bytes())
 project = (root / 'ios/Runner.xcodeproj/project.pbxproj').read_text()
-assert re.search(r'^version: 1\.6\.0\+52$', (root / 'pubspec.yaml').read_text(), re.M)
+assert re.search(r'^version: 1\.6\.0\+53$', (root / 'pubspec.yaml').read_text(), re.M)
 assert info['CFBundleDisplayName'] == 'Prospecto'
 assert firebase['BUNDLE_ID'] == 'com.ainego.aiProspectGps'
 assert firebase['PROJECT_ID'] == 'quiz-commercial'
@@ -27,4 +27,4 @@ for pattern in ['BEGIN PRIVATE KEY', 'BEGIN RSA PRIVATE KEY', 'sk_live_', 'sk_te
         assert pattern not in file.read_text(), f'Secret found in {file}'
 assert 'requestTrackingAuthorization' in (root / 'ios/Runner/AppDelegate.swift').read_text()
 assert 'verifyApplePurchase' in (root / 'lib/services/purchase_verification.dart').read_text()
-print('Prospecto 1.6.0+52 native source preflight passed')
+print('Prospecto 1.6.0+53 native source preflight passed')
