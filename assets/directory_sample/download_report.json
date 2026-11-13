@@ -1,0 +1,43 @@
+{
+  "at_utc": "2026-10-29T13:03:38.626581+00:00",
+  "per_response_cap_bytes": 524288,
+  "total_cap_bytes": 2097152,
+  "sources": [
+    {
+      "group": "chr",
+      "url": "https://recherche-entreprises.api.gouv.fr/near_point?lat=48.865&long=2.333&radius=3&activite_principale=55.10Z%2C56.10A%2C56.10B%2C56.10C%2C56.30Z&per_page=10&page=1",
+      "status": "downloaded",
+      "raw_bytes": 82888,
+      "rows": 10,
+      "raw_sha256": "e351550c00fafcbf175cc1c0b0c7390f623ed7e319d5212b577b76e2cadbec93",
+      "distributed_sha256": "e5e93176d5dc119d4e7349ee41468fc992f5656174a1bbe3db04c7c54bbf9552"
+    },
+    {
+      "group": "gms",
+      "url": "https://recherche-entreprises.api.gouv.fr/near_point?lat=48.865&long=2.333&radius=3&activite_principale=47.11D%2C47.11F&per_page=10&page=1",
+      "status": "downloaded",
+      "raw_bytes": 46449,
+      "rows": 10,
+      "raw_sha256": "2f8187462c3ab092889cb21de132e8afdc79e9b94b8bb57767ffd62e99f7e10f",
+      "distributed_sha256": "43adf1baea5e43c56e96845aa4e8cc7939853a45478a33ef9105f46604369b2d"
+    },
+    {
+      "group": "grossistes",
+      "url": "https://recherche-entreprises.api.gouv.fr/near_point?lat=48.865&long=2.333&radius=3&activite_principale=46.34Z%2C46.39B%2C46.31Z%2C46.32A&per_page=10&page=1",
+      "status": "downloaded",
+      "raw_bytes": 56029,
+      "rows": 10,
+      "raw_sha256": "776b42edc9af2cfd96b6c17473d41b21b79cc334d5395de217e1e6f9dce6e074",
+      "distributed_sha256": "896cbc9871414e2324c3b6020c2ce6a0ae3bd241ccba5b5d5b4fb8674e2e08ff"
+    },
+    {
+      "group": "logistique",
+      "url": "https://recherche-entreprises.api.gouv.fr/near_point?lat=48.865&long=2.333&radius=3&activite_principale=49.41A%2C49.41B%2C52.10B%2C52.29B&per_page=10&page=1",
+      "status": "downloaded",
+      "raw_bytes": 50061,
+      "rows": 10,
+      "raw_sha256": "4e39c96e43e2ae8c50ea9406daf2daaa1fc1f4c46be4222a1a84bb517cdb86b9",
+      "distributed_sha256": "acd5e73e0360deca07f2250a7e2a9864f5d337cd9e9b1ea1063b35846c1c6d55"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 workflows:
   prospecto-ios:
-    name: Prospecto 1.6.0 — iOS signé / TestFlight
+    name: Prospecto 1.6.1 — iOS signé / TestFlight
     instance_type: mac_mini_m2
     max_build_duration: 45
     integrations:
@@ -57,7 +57,7 @@ workflows:
         script: |
           set -euo pipefail
           flutter build ipa --release --no-pub \
-            --build-name=1.6.0 --build-number="$APP_BUILD_NUMBER" \
+            --build-name=1.6.1 --build-number="$APP_BUILD_NUMBER" \
             --dart-define-from-file=config/prod.json \
             --dart-define=ADMIN_TEST_MODE=false \
             --dart-define=ADMOB_IOS_BANNER_ID=ca-app-pub-1360261396564293/9926370092 \

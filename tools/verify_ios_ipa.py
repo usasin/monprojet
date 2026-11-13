@@ -16,7 +16,7 @@ with tempfile.TemporaryDirectory() as directory:
     info = plistlib.loads((app / 'Info.plist').read_bytes())
     firebase = plistlib.loads((app / 'GoogleService-Info.plist').read_bytes())
     assert info['CFBundleIdentifier'] == 'com.ainego.aiProspectGps'
-    assert info['CFBundleShortVersionString'] == '1.6.0'
+    assert info['CFBundleShortVersionString'] == '1.6.1'
     assert info['CFBundleVersion'] == os.environ['APP_BUILD_NUMBER']
     assert info['CFBundleDisplayName'] == 'Prospecto'
     assert info['GADApplicationIdentifier'] == 'ca-app-pub-1360261396564293~5907234032'

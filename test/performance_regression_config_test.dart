@@ -28,7 +28,8 @@ void main() {
 
     test('prospect search ignores stale async responses', () {
       expect(select, contains('token != _fetchToken'));
-      expect(select, contains('final resultIds = nextOptions.map((p) => p.id).toSet()'));
+      // Identity reconciliation is exercised with real public/private records
+      // in directory_selection_test.dart, rather than a previous local variable.
       expect(select, contains('animate: !_loading'));
     });
 

@@ -1,0 +1,49 @@
+# Install inside nginx's http context (sites-enabled on Debian/Ubuntu).
+# Replace api.example.invalid, certificate paths and the /srv/prospecto/data
+# alias with real server values. Run nginx -t before enabling.
+limit_req_zone $binary_remote_addr zone=prospecto_search:10m rate=5r/s;
+limit_conn_zone $binary_remote_addr zone=prospecto_downloads:10m;
+
+server {
+    listen 80;
+    server_name api.example.invalid;
+    return 301 https://$host$request_uri;
+}
+server {
+    listen 443 ssl;
+    server_name api.example.invalid;
+    ssl_certificate /etc/letsencrypt/live/api.example.invalid/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.example.invalid/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    # No precise address/GPS query logging.
+    access_log off;
+    error_log /var/log/nginx/prospecto-error.log crit;
+    client_max_body_size 1k;
+    limit_req_status 429;
+    limit_conn_status 429;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+    location ~ "^/_prospecto_packs/[A-Za-z0-9][A-Za-z0-9._-]{0,99}/blobs/[0-9a-f]{64}\.sqlite\.gz$" {
+        internal;
+        # Same data directory as PROSPECTO_HOST_DATA, containing releases/.
+        rewrite ^/_prospecto_packs/(.*)$ /$1 break;
+        root /srv/prospecto/data/releases;
+        default_type application/gzip;
+        limit_conn prospecto_downloads 2;
+        sendfile on;
+        etag off;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+    location /_prospecto_packs/ { return 404; }
+    location / {
+        limit_req zone=prospecto_search burst=10 nodelay;
+        proxy_pass http://127.0.0.1:59851;
+        proxy_buffering on;
+        proxy_read_timeout 30s;
+        proxy_connect_timeout 3s;
+        # Incoming forwarding headers are deliberately discarded.
+        proxy_set_header X-Forwarded-For "";
+        proxy_set_header X-Real-IP "";
+        proxy_set_header Host $host;
+    }
+}

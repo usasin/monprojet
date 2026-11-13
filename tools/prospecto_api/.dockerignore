@@ -1,0 +1,7 @@
+*
+!requirements.txt
+!gunicorn.conf.py
+!prospecto_api/
+!prospecto_api/**
+**/__pycache__
+**/*.pyc

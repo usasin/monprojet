@@ -15,6 +15,9 @@ class Prospect {
   final String? instagram;
   final String? facebook;
   final String? linkedin;
+  final String? source;
+  final String? siret;
+  final String? nafCode;
   final String? status;
   final String? role;
   final String? note;
@@ -41,6 +44,9 @@ class Prospect {
     this.instagram,
     this.facebook,
     this.linkedin,
+    this.source,
+    this.siret,
+    this.nafCode,
     this.status,
     this.role,
     this.note,
@@ -74,6 +80,9 @@ class Prospect {
       instagram: data['instagram']?.toString(),
       facebook: data['facebook']?.toString(),
       linkedin: data['linkedin']?.toString(),
+      source: data['source']?.toString(),
+      siret: data['siret']?.toString(),
+      nafCode: data['nafCode']?.toString(),
       status: data['status']?.toString(),
       role: data['role']?.toString(),
       note: data['note']?.toString(),
@@ -100,6 +109,9 @@ class Prospect {
     String? instagram,
     String? facebook,
     String? linkedin,
+    String? source,
+    String? siret,
+    String? nafCode,
     String? status,
     String? role,
     String? note,
@@ -124,6 +136,9 @@ class Prospect {
       instagram: instagram ?? this.instagram,
       facebook: facebook ?? this.facebook,
       linkedin: linkedin ?? this.linkedin,
+      source: source ?? this.source,
+      siret: siret ?? this.siret,
+      nafCode: nafCode ?? this.nafCode,
       status: status ?? this.status,
       role: role ?? this.role,
       note: note ?? this.note,
@@ -141,6 +156,9 @@ class Prospect {
         'category': category,
         'lat': lat,
         'lng': lng,
+        if (source != null && source!.isNotEmpty) 'source': source,
+        if (siret != null && siret!.isNotEmpty) 'siret': siret,
+        if (nafCode != null && nafCode!.isNotEmpty) 'nafCode': nafCode,
         if (phone != null && phone!.isNotEmpty) 'phone': phone,
         if (email != null && email!.isNotEmpty) 'email': email,
         if (website != null && website!.isNotEmpty) 'website': website,

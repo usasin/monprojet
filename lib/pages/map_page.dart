@@ -67,6 +67,8 @@ class _MapPageState extends State<MapPage> with SingleTickerProviderStateMixin {
   DateTime _date = DateTime.now();
   bool _loading = false;
   List<Prospect> _route = [];
+  // The footer scrolls to the stop list instead of repeating the stop count.
+  final GlobalKey _stopsSectionKey = GlobalKey();
 
   late final AnimationController _listAnim = AnimationController(
     vsync: this,
@@ -147,6 +149,17 @@ class _MapPageState extends State<MapPage> with SingleTickerProviderStateMixin {
       '&destination=$destination'
       '${waypoints.isNotEmpty ? '&waypoints=$waypoints' : ''}'
       '&travelmode=driving',
+    );
+  }
+
+  Future<void> _showStops() async {
+    final section = _stopsSectionKey.currentContext;
+    if (section == null || _route.isEmpty) return;
+    await Scrollable.ensureVisible(
+      section,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOutCubic,
+      alignment: 0.08,
     );
   }
 
@@ -300,6 +313,7 @@ class _MapPageState extends State<MapPage> with SingleTickerProviderStateMixin {
 
                           // ── Liste
                           _GlassCard(
+                            key: _stopsSectionKey,
                             isDark: isDark,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,8 +321,8 @@ class _MapPageState extends State<MapPage> with SingleTickerProviderStateMixin {
                                 _SectionHeader(
                                   step: 2,
                                   icon: Icons.route_rounded,
-                                  title:
-                                      'Itinéraire (${_route.length} arrêt${_route.length > 1 ? 's' : ''})',
+                                  title: Localizations.localeOf(context).languageCode.startsWith('fr')
+                                      ? 'Itinéraire' : 'Route',
                                   isDark: isDark,
                                 ),
                                 const SizedBox(height: 12),
@@ -425,47 +439,46 @@ class _MapPageState extends State<MapPage> with SingleTickerProviderStateMixin {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Row(
               children: [
-                // Compteur
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: _route.isNotEmpty ? _P.primary : null,
-                    color:
-                        _route.isEmpty ? Colors.white.withOpacity(0.25) : null,
+                // Secondary action: navigate to the stop list (not a third counter).
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _route.isEmpty ? null : _showStops,
                     borderRadius: BorderRadius.circular(14),
-                    boxShadow: _route.isNotEmpty
-                        ? [
-                            BoxShadow(
-                              color: _P.indigo.withOpacity(0.3),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
+                    child: Ink(
+                      decoration: BoxDecoration(
+                        gradient: _route.isNotEmpty ? _P.primary : null,
+                        color: _route.isEmpty
+                            ? Colors.white.withOpacity(0.25) : null,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.format_list_bulleted_rounded,
+                            size: 18,
+                            color: _route.isNotEmpty
+                                ? Colors.white : Colors.black38,
+                          ),
+                          const SizedBox(width: 6),
+                          LText(
+                            Localizations.localeOf(context).languageCode.startsWith('fr')
+                                ? 'Voir la liste' : 'View stops',
+                            style: TextStyle(
+                              color: _route.isNotEmpty
+                                  ? Colors.white : Colors.black38,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
                             ),
-                          ]
-                        : [],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.pin_drop_rounded,
-                        size: 18,
-                        color:
-                            _route.isNotEmpty ? Colors.white : Colors.black38,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      LText(
-                        '${_route.length} arrêt${_route.length > 1 ? 's' : ''}',
-                        style: TextStyle(
-                          color:
-                              _route.isNotEmpty ? Colors.white : Colors.black38,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -493,7 +506,7 @@ class _MapPageState extends State<MapPage> with SingleTickerProviderStateMixin {
 class _GlassCard extends StatelessWidget {
   final bool isDark;
   final Widget child;
-  const _GlassCard({required this.isDark, required this.child});
+  const _GlassCard({super.key, required this.isDark, required this.child});
 
   @override
   Widget build(BuildContext context) {

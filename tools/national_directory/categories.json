@@ -1,0 +1,1191 @@
+{
+  "schema_version": 1,
+  "version": "2026-10-28-naf2025-officielle",
+  "description": "Référentiel commercial extensible. Une correspondance NAF ou OSM indique une activité déclarée ou cartographiée, sans certifier un statut réglementaire.",
+  "nomenclatures": {
+    "NAFRev2": {
+      "status": "active_until_2026-12-31",
+      "source": "https://www.insee.fr/fr/information/2406147"
+    },
+    "NAF2025": {
+      "status": "official_crosswalk_inspected_conservative_activity_mapping",
+      "effective_from": "2027-01-01",
+      "source": "https://www.insee.fr/fr/information/8617910",
+      "correspondence_source": "https://www.insee.fr/fr/statistiques/fichier/8617910/Correspondances_NAFrev2-NAF2025.xlsx",
+      "source_sha256": "8746ed6b5ec70dca426a158a9b43b91e97fd71cf34bc0d8094b982b7260397ab",
+      "edition": "janvier 2026",
+      "note": "Catégories calculées seulement si toutes les origines rév.2 du code cible sont dans le périmètre, sauf GMS/supermarchés/hypermarchés vérifiés sur les intitulés officiels. Les cas ambigus sont listés pour revue. Aucun reclassement automatique de SIRET."
+    }
+  },
+  "matching_policy": {
+    "naf_prefix_suffix": "*",
+    "osm_rules": "OR des couples exacts key/value; aucun tag isolé ne prouve un statut réglementaire.",
+    "synonyms": "Aide à la recherche des catégories; ne doivent pas être recherchés automatiquement dans les raisons sociales pour affirmer une activité.",
+    "enterprise_sizes": "Lire une catégorie officielle d'entreprise, son millésime et sa provenance. Ne jamais déduire MIC/PME/ETI/GE des effectifs d'un établissement. PME inclut les microentreprises dans la définition statistique générale; la disponibilité d'une sous-catégorie MIC distincte dépend de la source.",
+    "unknown": "Conserver la nomenclature et le code bruts lorsque la correspondance n'est pas validée."
+  },
+  "categories": [
+    {
+      "id": "chr",
+      "label": "CHR / HORECA",
+      "synonyms": [
+        "CHR",
+        "HORECA",
+        "café hôtel restaurant",
+        "cafés hôtels restaurants"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "55.10Z",
+          "56.10A",
+          "56.10B",
+          "56.10C",
+          "56.30Z"
+        ],
+        "NAF2025": [
+          "55.10Y",
+          "56.11G",
+          "56.11H",
+          "56.11J",
+          "56.12Y",
+          "56.30Y"
+        ]
+      },
+      "osm": [
+        {
+          "key": "amenity",
+          "value": "cafe"
+        },
+        {
+          "key": "amenity",
+          "value": "bar"
+        },
+        {
+          "key": "amenity",
+          "value": "pub"
+        },
+        {
+          "key": "amenity",
+          "value": "restaurant"
+        },
+        {
+          "key": "amenity",
+          "value": "fast_food"
+        },
+        {
+          "key": "tourism",
+          "value": "hotel"
+        }
+      ],
+      "note": "Périmètre commercial explicite; n'inclut pas tous les hébergements ni la restauration collective.",
+      "naf2025_review_required": []
+    },
+    {
+      "id": "cafes_bars",
+      "label": "Cafés, bars et débits de boissons",
+      "synonyms": [
+        "café",
+        "bar",
+        "pub",
+        "débit de boissons",
+        "brasserie"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "56.30Z"
+        ],
+        "NAF2025": [
+          "56.30Y"
+        ]
+      },
+      "osm": [
+        {
+          "key": "amenity",
+          "value": "cafe"
+        },
+        {
+          "key": "amenity",
+          "value": "bar"
+        },
+        {
+          "key": "amenity",
+          "value": "pub"
+        }
+      ],
+      "parent_id": "chr",
+      "note": "Une brasserie avec restauration peut relever de 56.10A; le synonyme n'impose pas un code.",
+      "naf2025_review_required": []
+    },
+    {
+      "id": "hotels",
+      "label": "Hôtels et hébergement similaire",
+      "synonyms": [
+        "hôtel",
+        "hôtellerie",
+        "hotel"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "55.10Z"
+        ],
+        "NAF2025": [
+          "55.10Y"
+        ]
+      },
+      "osm": [
+        {
+          "key": "tourism",
+          "value": "hotel"
+        }
+      ],
+      "parent_id": "chr",
+      "naf2025_review_required": []
+    },
+    {
+      "id": "restaurants",
+      "label": "Restaurants",
+      "synonyms": [
+        "restaurant",
+        "restauration traditionnelle",
+        "restauration rapide",
+        "snack"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "56.10A",
+          "56.10B",
+          "56.10C"
+        ],
+        "NAF2025": [
+          "56.11G",
+          "56.11H",
+          "56.11J",
+          "56.12Y"
+        ]
+      },
+      "osm": [
+        {
+          "key": "amenity",
+          "value": "restaurant"
+        },
+        {
+          "key": "amenity",
+          "value": "fast_food"
+        },
+        {
+          "key": "amenity",
+          "value": "food_court"
+        }
+      ],
+      "parent_id": "chr",
+      "naf2025_review_required": []
+    },
+    {
+      "id": "gms",
+      "label": "Grandes et moyennes surfaces alimentaires",
+      "synonyms": [
+        "GMS",
+        "grande distribution",
+        "grande surface alimentaire"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "47.11D",
+          "47.11F"
+        ],
+        "NAF2025": [
+          "47.11J",
+          "47.11K"
+        ]
+      },
+      "osm": [
+        {
+          "key": "shop",
+          "value": "supermarket"
+        }
+      ],
+      "note": "Périmètre limité aux supermarchés et hypermarchés; un tag OSM supermarket ne distingue pas leur surface.",
+      "naf2025_review_required": [
+        "47.91Y"
+      ]
+    },
+    {
+      "id": "supermarkets",
+      "label": "Supermarchés",
+      "synonyms": [
+        "supermarché",
+        "supermarket"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "47.11D"
+        ],
+        "NAF2025": [
+          "47.11J"
+        ]
+      },
+      "osm": [
+        {
+          "key": "shop",
+          "value": "supermarket"
+        }
+      ],
+      "parent_id": "gms",
+      "note": "OSM fournit une catégorie commerciale approximative; seul le code officiel distingue ici supermarché/hypermarché.",
+      "naf2025_review_required": [
+        "47.91Y"
+      ]
+    },
+    {
+      "id": "hypermarkets",
+      "label": "Hypermarchés",
+      "synonyms": [
+        "hypermarché",
+        "hypermarket"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "47.11F"
+        ],
+        "NAF2025": [
+          "47.11K"
+        ]
+      },
+      "osm": [],
+      "parent_id": "gms",
+      "naf2025_review_required": [
+        "47.91Y"
+      ]
+    },
+    {
+      "id": "wholesale_food",
+      "label": "Grossistes alimentaires",
+      "synonyms": [
+        "grossiste alimentaire",
+        "commerce de gros alimentaire",
+        "fournisseur alimentaire"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "46.31Z",
+          "46.32A",
+          "46.32B",
+          "46.32C",
+          "46.33Z",
+          "46.36Z",
+          "46.37Z",
+          "46.38A",
+          "46.38B",
+          "46.39A",
+          "46.39B"
+        ],
+        "NAF2025": [
+          "46.31Y",
+          "46.32G",
+          "46.32H",
+          "46.33Y",
+          "46.36Y",
+          "46.37Y",
+          "46.38Y",
+          "46.39Y"
+        ]
+      },
+      "osm": [],
+      "note": "Les boissons sont une catégorie séparée. Un shop=wholesale seul ne précise pas le métier.",
+      "naf2025_review_required": []
+    },
+    {
+      "id": "wholesale_beverages",
+      "label": "Grossistes en boissons",
+      "synonyms": [
+        "grossiste boissons",
+        "négociant boissons",
+        "distributeur boissons"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "46.34Z"
+        ],
+        "NAF2025": [
+          "46.34Y"
+        ]
+      },
+      "osm": [],
+      "naf2025_review_required": []
+    },
+    {
+      "id": "wholesale_textiles",
+      "label": "Grossistes en textiles",
+      "synonyms": [
+        "grossiste textile",
+        "commerce de gros tissus"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "46.41Z"
+        ],
+        "NAF2025": [
+          "46.41Y"
+        ]
+      },
+      "osm": [],
+      "naf2025_review_required": []
+    },
+    {
+      "id": "wholesale_clothing",
+      "label": "Grossistes en habillement et chaussures",
+      "synonyms": [
+        "grossiste habillement",
+        "grossiste vêtements",
+        "grossiste chaussures"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "46.42Z"
+        ],
+        "NAF2025": [
+          "46.42Y"
+        ]
+      },
+      "osm": [],
+      "naf2025_review_required": []
+    },
+    {
+      "id": "wholesale_hardware",
+      "label": "Grossistes en quincaillerie",
+      "synonyms": [
+        "grossiste quincaillerie",
+        "fournisseur quincaillerie"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "46.74A"
+        ],
+        "NAF2025": []
+      },
+      "osm": [],
+      "naf2025_review_required": [
+        "46.84G"
+      ]
+    },
+    {
+      "id": "wholesale_electrical",
+      "label": "Grossistes en matériel électrique",
+      "synonyms": [
+        "grossiste électricité",
+        "grossiste matériel électrique",
+        "fournitures électriques"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "46.69A"
+        ],
+        "NAF2025": []
+      },
+      "osm": [],
+      "naf2025_review_required": [
+        "46.64G"
+      ]
+    },
+    {
+      "id": "wholesale_plumbing",
+      "label": "Grossistes en plomberie et chauffage",
+      "synonyms": [
+        "grossiste plomberie",
+        "grossiste chauffage",
+        "fournitures plomberie"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "46.74B"
+        ],
+        "NAF2025": [
+          "46.84H"
+        ]
+      },
+      "osm": [],
+      "naf2025_review_required": [
+        "46.84G"
+      ]
+    },
+    {
+      "id": "wholesale_construction",
+      "label": "Grossistes en bois et matériaux de construction",
+      "synonyms": [
+        "grossiste matériaux",
+        "négoce matériaux",
+        "grossiste construction",
+        "négoce bois"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "46.73A"
+        ],
+        "NAF2025": [
+          "46.83G"
+        ]
+      },
+      "osm": [],
+      "naf2025_review_required": []
+    },
+    {
+      "id": "wholesale_professional_equipment",
+      "label": "Grossistes en équipement professionnel",
+      "synonyms": [
+        "grossiste équipement professionnel",
+        "fournitures industrielles",
+        "équipement commerce",
+        "mobilier de bureau"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "46.61Z",
+          "46.62Z",
+          "46.63Z",
+          "46.64Z",
+          "46.65Z",
+          "46.66Z",
+          "46.69B",
+          "46.69C"
+        ],
+        "NAF2025": [
+          "46.61Y",
+          "46.62Y",
+          "46.63Y",
+          "46.64H",
+          "46.64J",
+          "46.64K"
+        ]
+      },
+      "osm": [],
+      "note": "Périmètre de fournitures et machines explicitement couvert par ces codes; ne représente pas tout le commerce B2B.",
+      "naf2025_review_required": [
+        "46.47Y",
+        "46.50Y"
+      ]
+    },
+    {
+      "id": "pharmacy",
+      "label": "Pharmacies",
+      "synonyms": [
+        "pharmacie",
+        "officine"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "47.73Z"
+        ],
+        "NAF2025": []
+      },
+      "osm": [
+        {
+          "key": "amenity",
+          "value": "pharmacy"
+        }
+      ],
+      "note": "Le code et le tag décrivent une activité; ils ne remplacent pas une vérification réglementaire d'autorisation d'officine.",
+      "naf2025_review_required": [
+        "47.73Y",
+        "47.92J"
+      ]
+    },
+    {
+      "id": "parapharmacy",
+      "label": "Parapharmacies (identification à confirmer)",
+      "synonyms": [
+        "parapharmacie",
+        "parapharmacy"
+      ],
+      "naf": {
+        "NAFRev2": [],
+        "NAF2025": []
+      },
+      "osm": [],
+      "osm_candidates": [
+        {
+          "key": "shop",
+          "value": "chemist"
+        }
+      ],
+      "ambiguous_naf_candidates": [
+        "47.75Z"
+      ],
+      "note": "47.75Z comprend aussi parfumerie, beauté, toilette et hygiène. Il ne suffit pas pour identifier une parapharmacie. shop=chemist indique un commerce de produits d'hygiène/soins et reste un indice cartographique, à confirmer. Aucun de ces indices ne déclenche automatiquement cette catégorie.",
+      "evidence_status": "candidate_requires_confirmation",
+      "naf2025_review_required": []
+    },
+    {
+      "id": "cosmetics_hygiene",
+      "label": "Parfumerie, beauté et hygiène",
+      "synonyms": [
+        "parfumerie",
+        "cosmétiques",
+        "produits de beauté",
+        "hygiène"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "47.75Z"
+        ],
+        "NAF2025": []
+      },
+      "osm": [
+        {
+          "key": "shop",
+          "value": "cosmetics"
+        },
+        {
+          "key": "shop",
+          "value": "perfumery"
+        },
+        {
+          "key": "shop",
+          "value": "chemist"
+        }
+      ],
+      "note": "Périmètre commercial compatible avec ces indices; ne présume pas une parapharmacie.",
+      "naf2025_review_required": [
+        "47.75Y",
+        "47.92J"
+      ]
+    },
+    {
+      "id": "transport",
+      "label": "Transport",
+      "synonyms": [
+        "transport",
+        "transporteur",
+        "fret",
+        "transport routier"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "49.*",
+          "50.*",
+          "51.*"
+        ],
+        "NAF2025": [
+          "49.11Y",
+          "49.12Y",
+          "49.20Y",
+          "49.31G",
+          "49.31H",
+          "49.32Y",
+          "49.33G",
+          "49.33H",
+          "49.34Y",
+          "49.39Y",
+          "49.41J",
+          "49.42Y",
+          "49.50Y",
+          "50.10Y",
+          "50.20Y",
+          "50.30Y",
+          "50.40Y",
+          "51.10Y",
+          "51.21Y",
+          "51.22Y"
+        ]
+      },
+      "osm": [],
+      "note": "Périmètre large incluant voyageurs et marchandises. Affiner par sous-catégories avant un ciblage métier précis.",
+      "naf2025_review_required": [
+        "49.41G",
+        "49.41H",
+        "52.24H",
+        "52.32Y",
+        "53.20G"
+      ]
+    },
+    {
+      "id": "logistics",
+      "label": "Organisation du transport et logistique",
+      "synonyms": [
+        "logistique",
+        "commissionnaire transport",
+        "affrètement",
+        "organisation transports"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "52.29A",
+          "52.29B"
+        ],
+        "NAF2025": [
+          "52.25Y",
+          "52.31Y"
+        ]
+      },
+      "osm": [
+        {
+          "key": "industrial",
+          "value": "logistics"
+        }
+      ],
+      "naf2025_review_required": [
+        "49.41G",
+        "49.41H",
+        "52.26Y",
+        "52.32Y",
+        "53.20G"
+      ]
+    },
+    {
+      "id": "warehouses",
+      "label": "Entreposage et stockage",
+      "synonyms": [
+        "entrepôt",
+        "entreposage",
+        "stockage",
+        "plateforme logistique"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "52.10A",
+          "52.10B"
+        ],
+        "NAF2025": [
+          "35.24Y",
+          "52.10G",
+          "52.10H"
+        ]
+      },
+      "osm": [
+        {
+          "key": "industrial",
+          "value": "warehouse"
+        }
+      ],
+      "note": "Un bâtiment building=warehouse seul n'identifie pas son exploitant ni une activité d'entreposage pour compte de tiers.",
+      "naf2025_review_required": [
+        "10.51H",
+        "63.10Y",
+        "68.20H"
+      ]
+    },
+    {
+      "id": "industry",
+      "label": "Industrie",
+      "synonyms": [
+        "industrie",
+        "usine",
+        "industriel",
+        "manufacture"
+      ],
+      "naf": {
+        "NAFRev2": [
+          "05.*",
+          "06.*",
+          "07.*",
+          "08.*",
+          "09.*",
+          "10.*",
+          "11.*",
+          "12.*",
+          "13.*",
+          "14.*",
+          "15.*",
+          "16.*",
+          "17.*",
+          "18.*",
+          "19.*",
+          "20.*",
+          "21.*",
+          "22.*",
+          "23.*",
+          "24.*",
+          "25.*",
+          "26.*",
+          "27.*",
+          "28.*",
+          "29.*",
+          "30.*",
+          "31.*",
+          "32.*",
+          "33.*",
+          "35.*",
+          "36.*",
+          "37.*",
+          "38.*",
+          "39.*"
+        ],
+        "NAF2025": [
+          "05.10Y",
+          "05.20Y",
+          "06.10Y",
+          "06.20Y",
+          "07.10Y",
+          "07.21Y",
+          "07.29Y",
+          "08.11Y",
+          "08.12Y",
+          "08.91Y",
+          "08.92Y",
+          "08.93Y",
+          "08.99Y",
+          "09.10Y",
+          "09.90Y",
+          "10.11Y",
+          "10.12Y",
+          "10.13G",
+          "10.13H",
+          "10.20Y",
+          "10.31Y",
+          "10.32Y",
+          "10.39G",
+          "10.39H",
+          "10.41Y",
+          "10.42Y",
+          "10.51G",
+          "10.51J",
+          "10.52Y",
+          "10.61G",
+          "10.61H",
+          "10.62Y",
+          "10.71G",
+          "10.71H",
+          "10.71J",
+          "10.72Y",
+          "10.73Y",
+          "10.81Y",
+          "10.82Y",
+          "10.83Y",
+          "10.84Y",
+          "10.85Y",
+          "10.86Y",
+          "10.89Y",
+          "10.91Y",
+          "10.92Y",
+          "11.01Y",
+          "11.02G",
+          "11.02H",
+          "11.03Y",
+          "11.04Y",
+          "11.05Y",
+          "11.06Y",
+          "11.07G",
+          "11.07H",
+          "12.00Y",
+          "13.10Y",
+          "13.20Y",
+          "13.30Y",
+          "13.91Y",
+          "13.92Y",
+          "13.93Y",
+          "13.94Y",
+          "13.95Y",
+          "13.96Y",
+          "13.99Y",
+          "14.10Y",
+          "14.21Y",
+          "14.22Y",
+          "14.23Y",
+          "14.24Y",
+          "14.29Y",
+          "15.11Y",
+          "15.12Y",
+          "15.20Y",
+          "16.11Y",
+          "16.12Y",
+          "16.21Y",
+          "16.22Y",
+          "16.23Y",
+          "16.24Y",
+          "16.25Y",
+          "16.26Y",
+          "16.27Y",
+          "16.28Y",
+          "17.11Y",
+          "17.12Y",
+          "17.21Y",
+          "17.22Y",
+          "17.23Y",
+          "17.24Y",
+          "17.25Y",
+          "18.11Y",
+          "18.13Y",
+          "18.14Y",
+          "18.20Y",
+          "19.10Y",
+          "19.20Y",
+          "20.11Y",
+          "20.12Y",
+          "20.13Y",
+          "20.14Y",
+          "20.15Y",
+          "20.16Y",
+          "20.17Y",
+          "20.20Y",
+          "20.30Y",
+          "20.41Y",
+          "20.42Y",
+          "20.51Y",
+          "20.59Y",
+          "20.60Y",
+          "21.10Y",
+          "21.20Y",
+          "22.11Y",
+          "22.12Y",
+          "22.21Y",
+          "22.22Y",
+          "22.23Y",
+          "22.24Y",
+          "22.25Y",
+          "22.26Y",
+          "23.11Y",
+          "23.12Y",
+          "23.13Y",
+          "23.14Y",
+          "23.15Y",
+          "23.20Y",
+          "23.31Y",
+          "23.32Y",
+          "23.41Y",
+          "23.42Y",
+          "23.43Y",
+          "23.44Y",
+          "23.45Y",
+          "23.51Y",
+          "23.52Y",
+          "23.61Y",
+          "23.62Y",
+          "23.63Y",
+          "23.64Y",
+          "23.65Y",
+          "23.66Y",
+          "23.70Y",
+          "23.91Y",
+          "23.99Y",
+          "24.10Y",
+          "24.20Y",
+          "24.31Y",
+          "24.32Y",
+          "24.33Y",
+          "24.34Y",
+          "24.41Y",
+          "24.42Y",
+          "24.43Y",
+          "24.44Y",
+          "24.45Y",
+          "24.46Y",
+          "24.51Y",
+          "24.52Y",
+          "24.53Y",
+          "24.54Y",
+          "25.11Y",
+          "25.12Y",
+          "25.21Y",
+          "25.22Y",
+          "25.30Y",
+          "25.40Y",
+          "25.51Y",
+          "25.52Y",
+          "25.53Y",
+          "25.61Y",
+          "25.62Y",
+          "25.63Y",
+          "25.91Y",
+          "25.92Y",
+          "25.93Y",
+          "25.94Y",
+          "25.99Y",
+          "26.11Y",
+          "26.12Y",
+          "26.20Y",
+          "26.30Y",
+          "26.40Y",
+          "26.51Y",
+          "26.52Y",
+          "26.60Y",
+          "26.70Y",
+          "27.11Y",
+          "27.12Y",
+          "27.20Y",
+          "27.31Y",
+          "27.32Y",
+          "27.33Y",
+          "27.40Y",
+          "27.51Y",
+          "27.52Y",
+          "27.90Y",
+          "28.11Y",
+          "28.12Y",
+          "28.13G",
+          "28.13H",
+          "28.14Y",
+          "28.15Y",
+          "28.21Y",
+          "28.22Y",
+          "28.23Y",
+          "28.24Y",
+          "28.25Y",
+          "28.29Y",
+          "28.30Y",
+          "28.41Y",
+          "28.42Y",
+          "28.91Y",
+          "28.92Y",
+          "28.93Y",
+          "28.94Y",
+          "28.95Y",
+          "28.96Y",
+          "28.97Y",
+          "28.99Y",
+          "29.10Y",
+          "29.20Y",
+          "29.31Y",
+          "29.32Y",
+          "30.11Y",
+          "30.12Y",
+          "30.13Y",
+          "30.20Y",
+          "30.31Y",
+          "30.32Y",
+          "30.40Y",
+          "30.91Y",
+          "30.92Y",
+          "30.99Y",
+          "31.00G",
+          "31.00H",
+          "31.00J",
+          "32.11Y",
+          "32.12Y",
+          "32.13Y",
+          "32.20Y",
+          "32.30Y",
+          "32.40Y",
+          "32.50Y",
+          "32.91Y",
+          "32.99Y",
+          "33.11Y",
+          "33.12Y",
+          "33.13Y",
+          "33.14Y",
+          "33.15Y",
+          "33.16Y",
+          "33.17Y",
+          "33.18G",
+          "33.18H",
+          "33.19Y",
+          "33.20Y",
+          "35.11Y",
+          "35.12Y",
+          "35.13Y",
+          "35.14Y",
+          "35.15G",
+          "35.15H",
+          "35.16Y",
+          "35.21Y",
+          "35.22Y",
+          "35.23Y",
+          "35.30Y",
+          "35.40Y",
+          "36.00Y",
+          "37.00Y",
+          "38.11Y",
+          "38.12Y",
+          "38.21Y",
+          "38.22Y",
+          "38.23Y",
+          "38.31Y",
+          "38.32Y",
+          "38.33Y",
+          "39.00Y"
+        ]
+      },
+      "osm": [
+        {
+          "key": "man_made",
+          "value": "works"
+        }
+      ],
+      "note": "Périmètre commercial regroupant sections B à E de NAF rév.2. Ne renseigne aucune puissance ni consommation.",
+      "naf2025_review_required": [
+        "03.30Y",
+        "10.51H",
+        "18.12Y",
+        "47.24Y",
+        "91.30Y"
+      ]
+    },
+    {
+      "id": "craft",
+      "label": "Activités artisanales cartographiées",
+      "synonyms": [
+        "artisan",
+        "artisanat",
+        "plombier",
+        "électricien",
+        "menuisier"
+      ],
+      "naf": {
+        "NAFRev2": [],
+        "NAF2025": []
+      },
+      "osm": [
+        {
+          "key": "craft",
+          "value": "plumber"
+        },
+        {
+          "key": "craft",
+          "value": "electrician"
+        },
+        {
+          "key": "craft",
+          "value": "carpenter"
+        },
+        {
+          "key": "craft",
+          "value": "cabinet_maker"
+        },
+        {
+          "key": "craft",
+          "value": "painter"
+        },
+        {
+          "key": "craft",
+          "value": "shoemaker"
+        },
+        {
+          "key": "craft",
+          "value": "tailor"
+        },
+        {
+          "key": "craft",
+          "value": "bakery"
+        },
+        {
+          "key": "craft",
+          "value": "metal_construction"
+        }
+      ],
+      "note": "Indices OSM de métiers, sans affirmer une inscription artisanale. Le statut artisan ne se déduit pas d'un code NAF ou de la taille.",
+      "evidence_status": "mapped_activity_only",
+      "naf2025_review_required": []
+    },
+    {
+      "id": "industrial_zones",
+      "label": "Zones industrielles",
+      "synonyms": [
+        "zone industrielle",
+        "ZI",
+        "parc industriel"
+      ],
+      "naf": {
+        "NAFRev2": [],
+        "NAF2025": []
+      },
+      "osm": [
+        {
+          "key": "landuse",
+          "value": "industrial"
+        }
+      ],
+      "entity_type": "area",
+      "note": "Zone géographique, jamais un établissement ou un SIRET; sa géométrie doit rester distincte d'un point de prospection.",
+      "naf2025_review_required": []
+    },
+    {
+      "id": "business_zones",
+      "label": "Zones d'activités commerciales",
+      "synonyms": [
+        "zone d'activités",
+        "ZA",
+        "ZAC",
+        "parc d'activités",
+        "zone commerciale"
+      ],
+      "naf": {
+        "NAFRev2": [],
+        "NAF2025": []
+      },
+      "osm": [
+        {
+          "key": "landuse",
+          "value": "commercial"
+        },
+        {
+          "key": "landuse",
+          "value": "retail"
+        }
+      ],
+      "entity_type": "area",
+      "note": "Cartographie de zones; ZAC ne prouve pas un statut administratif et toutes les zones d'activités ne sont pas couvertes.",
+      "naf2025_review_required": []
+    },
+    {
+      "id": "micro_enterprises",
+      "label": "Microentreprises (catégorie statistique)",
+      "synonyms": [
+        "MIC",
+        "microentreprise",
+        "TPE"
+      ],
+      "naf": {
+        "NAFRev2": [],
+        "NAF2025": []
+      },
+      "osm": [],
+      "enterprise_sizes": [
+        "MIC"
+      ],
+      "note": "Uniquement lorsque la catégorie statistique MIC est explicitement fournie par une source officielle. TPE est un terme commercial; microentreprise ne signifie pas régime de micro-entrepreneur.",
+      "naf2025_review_required": []
+    },
+    {
+      "id": "sme",
+      "label": "Petites et moyennes entreprises",
+      "synonyms": [
+        "PME",
+        "petite entreprise",
+        "moyenne entreprise"
+      ],
+      "naf": {
+        "NAFRev2": [],
+        "NAF2025": []
+      },
+      "osm": [],
+      "enterprise_sizes": [
+        "PME",
+        "MIC"
+      ],
+      "note": "La définition statistique des PME comprend les microentreprises. Une valeur MIC distincte n'est utilisée que si la source la donne explicitement.",
+      "naf2025_review_required": []
+    },
+    {
+      "id": "intermediate_enterprises",
+      "label": "Entreprises de taille intermédiaire",
+      "synonyms": [
+        "ETI",
+        "entreprise intermédiaire"
+      ],
+      "naf": {
+        "NAFRev2": [],
+        "NAF2025": []
+      },
+      "osm": [],
+      "enterprise_sizes": [
+        "ETI"
+      ],
+      "naf2025_review_required": []
+    },
+    {
+      "id": "large_enterprises",
+      "label": "Grandes entreprises",
+      "synonyms": [
+        "GE",
+        "grande entreprise"
+      ],
+      "naf": {
+        "NAFRev2": [],
+        "NAF2025": []
+      },
+      "osm": [],
+      "enterprise_sizes": [
+        "GE"
+      ],
+      "naf2025_review_required": []
+    }
+  ]
+}

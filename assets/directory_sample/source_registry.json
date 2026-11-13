@@ -1,0 +1,506 @@
+{
+  "checked_at": "2026-10-28",
+  "scope": "Sources nationales prioritaires et compléments sectoriels. Un catalogue n'est pas une garantie d'exhaustivité de tous les jeux locaux.",
+  "bulk_download_enabled": false,
+  "sources": [
+    {
+      "id": "sirene",
+      "label": "SIRENE — unités légales et établissements",
+      "producer": "INSEE",
+      "authority": "public",
+      "reliability": "Référentiel officiel d'identité, état et APE déclarés; ne certifie pas l'activité réelle sur place.",
+      "license": "Licence Ouverte 2.0",
+      "license_url": "https://www.data.gouv.fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret",
+      "frequency": "Stocks mensuels; API pour actualisations infra-mensuelles",
+      "formats": [
+        "CSV dans ZIP",
+        "Parquet",
+        "API JSON avec compte"
+      ],
+      "page": "https://www.insee.fr/fr/information/3591226",
+      "download_urls": [
+        "https://object.files.data.gouv.fr/data-pipeline-open/siren/stock/StockUniteLegale_utf8.zip",
+        "https://object.files.data.gouv.fr/data-pipeline-open/siren/stock/StockEtablissement_utf8.zip"
+      ],
+      "automation": "URL stables des stocks; importer les deux fichiers courants en une opération.",
+      "adapter": "ready_csv_zip; parquet_optional_pyarrow",
+      "sample": "Schéma officiel testé par fixtures; extrait réel d'identité via API Recherche d'entreprises",
+      "limits": "Filtrage O/actif; pas de réidentification de P/[ND]. Arrêt annoncé des CSV au second semestre 2027."
+    },
+    {
+      "id": "sirene_geolocation",
+      "label": "Géolocalisation INSEE des établissements",
+      "producer": "INSEE",
+      "authority": "public",
+      "reliability": "Géocodage pour études statistiques; qualité et référentiel à conserver.",
+      "license": "Licence Ouverte 2.0",
+      "license_url": "https://www.data.gouv.fr/datasets/geolocalisation-des-etablissements-du-repertoire-sirene-pour-les-etudes-statistiques",
+      "frequency": "Mensuelle",
+      "formats": [
+        "CSV ZIP",
+        "Parquet"
+      ],
+      "page": "https://www.data.gouv.fr/datasets/geolocalisation-des-etablissements-du-repertoire-sirene-pour-les-etudes-statistiques",
+      "download_urls": [],
+      "automation": "Résoudre la ressource courante via API data.gouv et joindre strictement sur SIRET.",
+      "adapter": "not_ready_native_xy_projection_requires_validation",
+      "sample": "Non téléchargé : stock volumineux",
+      "limits": "Ne jamais interpréter X/Y Lambert ou UTM comme longitude/latitude. Adaptateur projeté non validé dans ce livrable."
+    },
+    {
+      "id": "ban",
+      "label": "Base Adresse Nationale",
+      "producer": "IGN / producteurs publics d'adresses",
+      "authority": "public",
+      "reliability": "Référentiel d'adressage; ne prouve pas l'occupation commerciale.",
+      "license": "Licence Ouverte 2.0",
+      "license_url": "https://adresse.data.gouv.fr/outils/telechargements",
+      "frequency": "Fichiers actualisés régulièrement; sélectionner l'édition courante datée",
+      "formats": [
+        "CSV gzip",
+        "Géoplateforme GeoJSON"
+      ],
+      "page": "https://adresse.data.gouv.fr/outils/telechargements",
+      "download_urls": [
+        "https://data.geopf.fr/geocodage/search?q=10%20rue%20de%20la%20Paix%20Paris&limit=3"
+      ],
+      "automation": "Téléchargement national ou fichiers départementaux; appariement local commune/numéro/suffixe/voie.",
+      "adapter": "ready_historical_csv_and_geocoding_geojson",
+      "sample": "Deux adresses complètes issues d'une requête réelle bornée",
+      "limits": "Ancienne API Adresse arrêtée; ambiguïtés non résolues automatiquement. Nouveau CSV identifiants BAN à valider s'il change le schéma."
+    },
+    {
+      "id": "osm",
+      "label": "OpenStreetMap",
+      "producer": "Contributeurs OpenStreetMap",
+      "authority": "community_not_government",
+      "reliability": "Complément collaboratif CHR/commerces/activité; couverture et fraîcheur variables.",
+      "license": "ODbL 1.0",
+      "license_url": "https://www.openstreetmap.org/copyright",
+      "frequency": "Continue; extractions datées",
+      "formats": [
+        "Overpass JSON",
+        "OSM XML",
+        "PBF optionnel"
+      ],
+      "page": "https://www.openstreetmap.org/export",
+      "download_urls": [
+        "https://download.geofabrik.de/europe/france.html"
+      ],
+      "automation": "Préférer extraits géographiques datés pour le national; pas de balayage national Overpass.",
+      "adapter": "ready_csv_overpass_json_xml_nodes; pbf_optional_node_reader",
+      "sample": "Fixtures; tentative réelle Overpass expirée, non présentée comme zéro résultat",
+      "limits": "Ways/relations XML/PBF sans centre sont rejetés et comptés; polygones de zones non conservés. Attribution et conditions de bases dérivées ODbL à respecter."
+    },
+    {
+      "id": "enedis_address",
+      "label": "Enedis — consommation annuelle par adresse",
+      "producer": "Enedis",
+      "authority": "public_operator",
+      "reliability": "Agrégats publiés; adresses indicatives, non individuelles.",
+      "license": "Licence Ouverte 2.0",
+      "license_url": "https://opendata.enedis.fr/datasets/consommation-annuelle-entreprise-par-adresse/",
+      "frequency": "Annuelle",
+      "formats": [
+        "CSV",
+        "Data Fair JSON"
+      ],
+      "page": "https://opendata.enedis.fr/datasets/consommation-annuelle-entreprise-par-adresse/",
+      "download_urls": [
+        "https://opendata.enedis.fr/data-fair/api/v1/datasets/consommation-annuelle-entreprise-par-adresse/lines?size=3"
+      ],
+      "automation": "Export courant ou pagination de l'API Data Fair; conserver millésime et identifiants de maille.",
+      "adapter": "ready_official_csv_json",
+      "sample": "Trois observations réelles 2022/2023/2024; MWh convertis en kWh",
+      "limits": "Ne donne pas la puissance souscrite ni le segment contractuel réel d'un SIRET."
+    },
+    {
+      "id": "enedis_iris",
+      "label": "Enedis — consommation par IRIS et NAF2",
+      "producer": "Enedis",
+      "authority": "public_operator",
+      "reliability": "Contexte statistique territorial et sectoriel; valeurs secrétisées possibles.",
+      "license": "Licence Ouverte 2.0",
+      "license_url": "https://opendata.enedis.fr/datasets/consommation-electrique-par-secteur-dactivite-iris/",
+      "frequency": "Annuelle",
+      "formats": [
+        "CSV",
+        "Data Fair JSON"
+      ],
+      "page": "https://opendata.enedis.fr/datasets/consommation-electrique-par-secteur-dactivite-iris/",
+      "download_urls": [
+        "https://opendata.enedis.fr/data-fair/api/v1/datasets/consommation-electrique-par-secteur-dactivite-iris/lines?size=3"
+      ],
+      "automation": "Importer l'export daté; schéma officiel reconnu sans ajouter public=true.",
+      "adapter": "ready_official_csv_json",
+      "sample": "Trois lignes initiales avec masquages/résidentiel, puis trois lignes ENT avec consommation",
+      "limits": "RES exclu du B2B; absence de mesure distincte de zéro. Jamais réparti entre SIRET."
+    },
+    {
+      "id": "enedis_power",
+      "label": "Enedis — profils et plages de puissance",
+      "producer": "Enedis",
+      "authority": "public_operator",
+      "reliability": "Statistiques de profils; pas des contrats individuels.",
+      "license": "Licence Ouverte 2.0 (vérifier la fiche de chaque export)",
+      "license_url": "https://opendata.enedis.fr/datasets/nb-clients-sup-36/",
+      "frequency": "Dépend du jeu : points/profils et séries temporelles",
+      "formats": [
+        "CSV",
+        "API Data Fair"
+      ],
+      "page": "https://opendata.enedis.fr/datasets/nb-clients-sup-36/",
+      "download_urls": [],
+      "automation": "Importer en contexte statistique après validation des colonnes et unités.",
+      "adapter": "normalized_annual_energy_csv_only; raw_profile_timeseries_not_ready",
+      "sample": "Fixtures normalisées uniquement",
+      "limits": "Une plage de puissance, un profil ou un NAF ne permet pas d'affirmer C1/C2/C3/C4/C5 pour une entreprise."
+    },
+    {
+      "id": "sdes_energy",
+      "label": "Données locales de consommation d'énergie",
+      "producer": "SDES et gestionnaires de réseaux",
+      "authority": "public",
+      "reliability": "Complément multi-gestionnaires, selon les mailles publiées.",
+      "license": "Licence Ouverte sur les jeux publiés; confirmer ressource retenue",
+      "license_url": "https://www.statistiques.developpement-durable.gouv.fr/donnees-locales-de-consommation-denergie",
+      "frequency": "Annuelle",
+      "formats": [
+        "CSV",
+        "XLSX",
+        "API selon jeu"
+      ],
+      "page": "https://www.statistiques.developpement-durable.gouv.fr/donnees-locales-de-consommation-denergie",
+      "download_urls": [],
+      "automation": "Référencer le millésime et la ressource, importer séparément de données de contrat.",
+      "adapter": "not_ready_native_schema",
+      "sample": "Non téléchargé",
+      "limits": "Utile aux territoires hors Enedis; ne garantit pas des données individuelles SIRET."
+    },
+    {
+      "id": "bodacc",
+      "label": "BODACC — annonces commerciales",
+      "producer": "DILA",
+      "authority": "public",
+      "reliability": "Publication légale datée; ne remplace pas l'état actuel SIRENE.",
+      "license": "Licence Ouverte 2.0 et conditions API",
+      "license_url": "https://www.data.gouv.fr/dataservices/api-bulletin-officiel-des-annonces-civiles-et-commerciales-bodacc",
+      "frequency": "Cinq parutions par semaine",
+      "formats": [
+        "CSV",
+        "JSON API/export",
+        "XML natif"
+      ],
+      "page": "https://www.bodacc.fr/pages/donnees-ouvertes-et-api/",
+      "download_urls": [
+        "https://bodacc-datadila.opendatasoft.com/api/explore/v2.1/catalog/datasets/annonces-commerciales/records?limit=3",
+        "https://echanges.dila.gouv.fr/OPENDATA/BODACC/FluxAnneeCourante/"
+      ],
+      "automation": "Exports API datés ou flux; rattachement SIREN exact et événements conservés.",
+      "adapter": "ready_csv_json; native_xml_not_ready",
+      "sample": "Trois annonces générales et deux annonces réelles rattachées à EDF",
+      "limits": "Pas de noms de dirigeants ou texte libre dans les packs. Une radiation historique ne ferme pas automatiquement un établissement actuel."
+    },
+    {
+      "id": "bpe",
+      "label": "Base permanente des équipements 2025",
+      "producer": "INSEE",
+      "authority": "public",
+      "reliability": "Observation statistique d'équipements, pas registre actuel de toutes les entreprises.",
+      "license": "Licence Ouverte (données INSEE)",
+      "license_url": "https://www.insee.fr/fr/information/2008466?page=copyright.htm",
+      "frequency": "Millésime annuel; fichier détail actualisé mensuellement pour diffusion personnelle",
+      "formats": [
+        "CSV ZIP",
+        "Parquet"
+      ],
+      "page": "https://www.insee.fr/fr/statistiques/8217525",
+      "download_urls": [
+        "https://www.insee.fr/fr/statistiques/fichier/8217525/BPE25.zip"
+      ],
+      "automation": "Un export national, partition automatique; TYPEQU et statut de diffusion reconnus.",
+      "adapter": "ready_csv_zip; parquet_optional_pyarrow",
+      "sample": "Dix lignes officielles, lues avec un Range de 64 Kio; deux observations SIRET diffusibles retenues",
+      "limits": "Pas de création d'entreprise active sur la seule présence BPE. Coordonnées WGS84 directes; X/Y ne sont pas assimilés au GPS."
+    },
+    {
+      "id": "inpi_rne",
+      "label": "Registre national des entreprises",
+      "producer": "INPI",
+      "authority": "public",
+      "reliability": "Référentiel légal; champs et restrictions propres au RNE.",
+      "license": "Licence RNE homologuée — accès et acceptation requis, pas une licence générique LO2",
+      "license_url": "https://data.inpi.fr/content/editorial/licences_reutilisation_donnees_inpi",
+      "frequency": "Quotidienne; API différentielle",
+      "formats": [
+        "JSON API/SFTP",
+        "PDF documents non exploités ici"
+      ],
+      "page": "https://data.inpi.fr/content/editorial/Acces_API_Entreprises",
+      "download_urls": [
+        "https://registre-national-entreprises.inpi.fr/api/companies"
+      ],
+      "automation": "Compte gratuit et licence; token à conserver hors données. Fichiers téléchargés par l'utilisateur ensuite déposables.",
+      "adapter": "limited_nonpersonal_facts_and_opposition; tested_on_documented_synthetic_schema_not_authenticated_real_export",
+      "sample": "Documentation INPI API v5 août 2026 vérifiée; aucun compte utilisé ni données authentifiées téléchargées",
+      "limits": "diffusionCommerciale=false et diffusionINSEE=N/P excluent la prospection commune; dirigeants, bénéficiaires effectifs, naissance et comptes privés ignorés."
+    },
+    {
+      "id": "annuaire",
+      "label": "API Recherche d'entreprises",
+      "producer": "DINUM / administrations partenaires",
+      "authority": "public",
+      "reliability": "Synthèse ouverte de sources administratives; ne constitue pas un export intégral SIRENE.",
+      "license": "Licences des sources publiques; respecter leurs restrictions",
+      "license_url": "https://recherche-entreprises.api.gouv.fr/docs/",
+      "frequency": "Selon les sources amont; dates INSEE/RNE disponibles",
+      "formats": [
+        "JSON"
+      ],
+      "page": "https://annuaire-entreprises.data.gouv.fr/donnees/api-entreprises",
+      "download_urls": [
+        "https://recherche-entreprises.api.gouv.fr/search?q=552081317&per_page=1"
+      ],
+      "automation": "Requêtes ciblées/contrôles; respecter 429/Retry-After. Ne pas reconstituer le national par balayage API.",
+      "adapter": "ready_json_siege_and_matching_etablissements",
+      "sample": "EDF, une unité légale et son siège actif géocodé",
+      "limits": "Les autres établissements d'une entreprise ne sont pas tous renvoyés dans une seule recherche; ne pas annoncer une couverture exhaustive."
+    },
+    {
+      "id": "ademe_rge",
+      "label": "Liste des entreprises et qualifications RGE",
+      "producer": "ADEME et organismes qualificateurs",
+      "authority": "public",
+      "reliability": "Qualification et période de validité à lire, distinctes de l'état SIRENE.",
+      "license": "Licence Ouverte 2.0",
+      "license_url": "https://www.data.gouv.fr/datasets/liste-des-entreprises-rge",
+      "frequency": "Quotidienne",
+      "formats": [
+        "CSV",
+        "Data Fair JSON"
+      ],
+      "page": "https://data.ademe.fr/datasets/liste-des-entreprises-rge-2",
+      "download_urls": [
+        "https://data.ademe.fr/data-fair/api/v1/datasets/liste-des-entreprises-rge-2/lines?size=3"
+      ],
+      "automation": "Export complet daté, rattachement SIRET exact; conserver début/fin et organisme.",
+      "adapter": "ready_csv_json_qualification_only_for_existing_public_establishments",
+      "sample": "Trois lignes réelles; contacts ignorés",
+      "limits": "Présence sur le fichier ne prouve pas une qualification RGE active pour tous travaux; respecter intitulé et validité. Aucune inférence énergétique."
+    },
+    {
+      "id": "icpe",
+      "label": "Installations classées industrielles",
+      "producer": "Ministère de la Transition écologique / BRGM Géorisques",
+      "authority": "public",
+      "reliability": "Inventaire réglementaire, incluant des sites en cessation et un périmètre de publication défini.",
+      "license": "Licence Ouverte d'après mentions légales Géorisques, sauf droits tiers signalés",
+      "license_url": "https://www.georisques.gouv.fr/mentions-legales",
+      "frequency": "Quotidienne d'après le producteur",
+      "formats": [
+        "CSV",
+        "API JSON",
+        "WFS"
+      ],
+      "page": "https://www.georisques.gouv.fr/donnees/bases-de-donnees/installations-industrielles",
+      "download_urls": [
+        "https://georisques.gouv.fr/api/v1/"
+      ],
+      "automation": "Export public courant; jointure SIRET/AIOT après validation du schéma et de l'état.",
+      "adapter": "not_ready_native_schema",
+      "sample": "Non téléchargé",
+      "limits": "L'absence de licence sur certaines fiches moissonnées n'a pas été assimilée à une autorisation; conditions vérifiées chez le producteur. ICPE ne prouve pas une consommation ou un segment Enedis."
+    },
+    {
+      "id": "sdes_logistics",
+      "label": "Entrepôts et plateformes logistiques",
+      "producer": "SDES",
+      "authority": "public",
+      "reliability": "Statistiques annuelles, champ >=10 000 m² couverts/fermés depuis 2023.",
+      "license": "Licence Ouverte",
+      "license_url": "https://www.data.gouv.fr/datasets/entrepots-et-plateformes-logistiques",
+      "frequency": "Annuelle",
+      "formats": [
+        "CSV agrégés",
+        "XLSX",
+        "GPKG aires logistiques"
+      ],
+      "page": "https://www.data.gouv.fr/datasets/entrepots-et-plateformes-logistiques",
+      "download_urls": [],
+      "automation": "Millésimes DiDo; traitement en contexte géographique distinct des établissements.",
+      "adapter": "not_ready_native_aggregates",
+      "sample": "Notice officielle vérifiée, pas de stock téléchargé",
+      "limits": "Les fichiers publics présentés sont agrégés et parfois secrétisés : aucun inventaire individuel SIRET ne doit être reconstruit à partir d'intervalles."
+    },
+    {
+      "id": "finess",
+      "label": "FINESS structures — nouveau flux",
+      "producer": "Agence du Numérique en Santé",
+      "authority": "public",
+      "reliability": "Référentiel sectoriel santé/médico-social; structures fermées présentes.",
+      "license": "Licence Ouverte 2.0",
+      "license_url": "https://www.data.gouv.fr/datasets/finess-structures-1",
+      "frequency": "Quotidienne, snapshots mensuels/annuels",
+      "formats": [
+        "JSON gzip"
+      ],
+      "page": "https://www.data.gouv.fr/datasets/finess-structures-1",
+      "download_urls": [
+        "https://github.com/ansforge/finess/blob/main/flux/out/data.gouv/structure/schema/schema-structures-v1.json"
+      ],
+      "automation": "Nouveau flux depuis juillet 2026, filtrer structures actives et identifiants exacts.",
+      "adapter": "not_ready_new_2026_native_schema",
+      "sample": "Non téléchargé; ancien flux mai2026 reconnu obsolète",
+      "limits": "Ne pas utiliser l'ancienne fréquence bimestrielle ni l'ancien CSV comme flux courant."
+    },
+    {
+      "id": "atout_france",
+      "label": "Hébergements touristiques classés",
+      "producer": "Atout France",
+      "authority": "public_service",
+      "reliability": "Registre des hébergements classés, classement volontaire; n'inclut pas tout CHR.",
+      "license": "Licence Ouverte",
+      "license_url": "https://www.data.gouv.fr/datasets/hebergements-touristiques-classes-en-france",
+      "frequency": "Publication courante; fiche consultée à jour, cadence contractuelle non confirmée",
+      "formats": [
+        "CSV"
+      ],
+      "page": "https://www.atout-france.fr/fr/classement-des-hebergements-touristiques",
+      "download_urls": [
+        "https://www.data.gouv.fr/datasets/hebergements-touristiques-classes-en-france"
+      ],
+      "automation": "Résoudre la ressource CSV courante depuis le catalogue, rapprocher SIRET s'il est présent.",
+      "adapter": "not_ready_native_schema",
+      "sample": "Non téléchargé",
+      "limits": "Le classement ne prouve pas activité énergétique, et les hôtels non classés restent hors de ce registre."
+    },
+    {
+      "id": "geography",
+      "label": "COG et découpage administratif",
+      "producer": "INSEE / DINUM API Geo",
+      "authority": "public",
+      "reliability": "Codes géographiques officiels; conserver le millésime des communes/IRIS.",
+      "license": "Licence Ouverte 2.0",
+      "license_url": "https://geo.api.gouv.fr/decoupage-administratif",
+      "frequency": "Selon évolutions administratives; millésimes COG annuels",
+      "formats": [
+        "CSV",
+        "JSON",
+        "GeoJSON"
+      ],
+      "page": "https://geo.api.gouv.fr/decoupage-administratif",
+      "download_urls": [
+        "https://geo.api.gouv.fr/departements?fields=code,nom,codeRegion"
+      ],
+      "automation": "Référentiel 101 départements chargé une fois, génération automatique des régions correspondantes.",
+      "adapter": "ready_department_region_reference",
+      "sample": "101 départements récupérés, Corse et DROM compris",
+      "limits": "Un rattachement département-région n'est pas une preuve de couverture complète des entreprises."
+    },
+    {
+      "id": "naf",
+      "label": "NAF rév.2, NAF 2025 et correspondances",
+      "producer": "INSEE",
+      "authority": "public",
+      "reliability": "Nomenclature officielle; une correspondance multiple ne recode pas un établissement.",
+      "license": "Licence Ouverte (données INSEE)",
+      "license_url": "https://www.insee.fr/fr/information/2008466?page=copyright.htm",
+      "frequency": "À chaque révision/édition",
+      "formats": [
+        "XLSX",
+        "PDF",
+        "CSV dérivé local"
+      ],
+      "page": "https://www.insee.fr/fr/information/8617910",
+      "download_urls": [
+        "https://www.insee.fr/fr/statistiques/fichier/8617910/Correspondances_NAFrev2-NAF2025.xlsx"
+      ],
+      "automation": "build_naf_reference.py relit le classeur, conserve SHA256 et ambiguïtés dans le référentiel.",
+      "adapter": "ready_official_crosswalk_conservative_categories",
+      "sample": "Classeur officiel 222781 octets; 1223 liens lus",
+      "limits": "Les codes APE 2025 s'appliquent à partir du 1er janvier2027; aucun remplacement automatique du code individuel actuel."
+    },
+    {
+      "id": "cerema_fusac",
+      "label": "FUSAC — foncier à usage d’activités",
+      "producer": "Cerema",
+      "authority": "public",
+      "reliability": "Pré-identification nationale des sites/terrains et établissements, à confronter aux inventaires locaux.",
+      "license": "Licence Ouverte 2.0",
+      "license_url": "https://www.data.gouv.fr/datasets/fusac-base-nationale-des-fonciers-a-usage-dactivites",
+      "frequency": "Millésimes annuels annoncés; vérifier la ressource courante",
+      "formats": [
+        "GPKG",
+        "PostGIS SQL",
+        "XLSX sites"
+      ],
+      "page": "https://www.data.gouv.fr/datasets/fusac-base-nationale-des-fonciers-a-usage-dactivites",
+      "download_urls": [],
+      "automation": "Export national et jointures spatiales après conversion EPSG:2154; sites séparés des entreprises.",
+      "adapter": "not_ready_native_spatial_schema",
+      "sample": "Documentation officielle seulement, aucun stock volumineux",
+      "limits": "Ne pas exécuter directement un dump SQL importé. Ni vacance ni activité agricole garanties par ce jeu."
+    },
+    {
+      "id": "cerema_empcom",
+      "label": "EmpCom — grandes zones commerciales périphériques",
+      "producer": "Cerema",
+      "authority": "public",
+      "reliability": "Recensement d’emprises sélectionnées, non exhaustif des zones d’activités.",
+      "license": "Open data annoncé par Cerema; vérifier la licence du fichier national retenu",
+      "license_url": "https://www.cerema.fr/index.php/fr/actualites/donnees-geolocalisation-1500-zones-commerciales-peripherie",
+      "frequency": "Millésimes; cadence de révision non garantie",
+      "formats": [
+        "GPKG",
+        "CSV/XLSX de certains diffuseurs"
+      ],
+      "page": "https://www.cerema.fr/index.php/fr/actualites/donnees-geolocalisation-1500-zones-commerciales-peripherie",
+      "download_urls": [],
+      "automation": "Contours et identifiants de zones à traiter séparément, pas comme des établissements.",
+      "adapter": "not_ready_native_spatial_schema",
+      "sample": "Documentation producteur vérifiée",
+      "limits": "Ne pas étendre la licence d’un extrait local à tous les fichiers; pas de SIRET inventé pour un polygone."
+    },
+    {
+      "id": "dgal_approvals",
+      "label": "Établissements agréés CE — denrées animales",
+      "producer": "Ministère de l’Agriculture / DGAL",
+      "authority": "public",
+      "reliability": "Agrément sanitaire par activité et établissement; utile à certains grossistes agroalimentaires.",
+      "license": "Conditions de la ressource à confirmer avant redistribution automatique",
+      "license_url": "https://agriculture.gouv.fr/liste-des-etablissements-agrees-ce-conformement-au-reglement-ce-ndeg8532004-lists-ue-approved",
+      "frequency": "Listes courantes, cadence contractuelle non confirmée",
+      "formats": [
+        "Listes par filière selon export producteur"
+      ],
+      "page": "https://agriculture.gouv.fr/liste-des-etablissements-agrees-ce-conformement-au-reglement-ce-ndeg8532004-lists-ue-approved",
+      "download_urls": [],
+      "automation": "Résoudre liste/filière courante; adapter le schéma et la licence avant activation.",
+      "adapter": "not_ready_license_and_schema",
+      "sample": "Source officielle identifiée, pas de téléchargement",
+      "limits": "Accès gratuit ne suffit pas à conclure sur toutes les conditions de réutilisation; agrément ≠ grossiste universel."
+    },
+    {
+      "id": "data_gouv_catalog",
+      "label": "Catalogue et API data.gouv.fr",
+      "producer": "DINUM / producteurs de chaque jeu",
+      "authority": "public_catalog",
+      "reliability": "Point de découverte et de métadonnées; qualité et licence à vérifier chez chaque producteur.",
+      "license": "Pas de licence unique pour tous les jeux hébergés",
+      "license_url": "https://www.data.gouv.fr/pages/legal/licences",
+      "frequency": "Selon chaque producteur",
+      "formats": [
+        "API métadonnées JSON",
+        "Ressources et API tabulaire"
+      ],
+      "page": "https://guides.data.gouv.fr/",
+      "download_urls": [
+        "https://www.data.gouv.fr/api/1/datasets/"
+      ],
+      "automation": "Résolution de ressources par identifiant stable, date, schéma et empreinte; pas par dernier lien trouvé.",
+      "adapter": "catalog_research; arbitrary_datasets_not_automatically_imported",
+      "sample": "Fiches officielles consultées",
+      "limits": "Une fiche moissonnée peut avoir des métadonnées incomplètes ou une ressource obsolète."
+    }
+  ]
+}

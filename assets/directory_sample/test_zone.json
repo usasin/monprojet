@@ -1,0 +1,7 @@
+{
+  "query": "CHR",
+  "address": "Zone test extrait réel · Paris, centre 48.865 / 2.333",
+  "lon": 2.333,
+  "source_radius_meters": 3000,
+  "lat": 48.865
+}

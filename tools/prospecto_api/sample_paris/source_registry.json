@@ -1,0 +1,134 @@
+{
+  "checked_at": "2026-10-28",
+  "scope": "Sources de l’extrait public et du socle national B2B, sans énergie",
+  "bulk_download_enabled": false,
+  "sources": [
+    {
+      "id": "sirene",
+      "label": "SIRENE — unités légales et établissements",
+      "producer": "INSEE",
+      "authority": "public",
+      "reliability": "Référentiel officiel d'identité, état et APE déclarés; ne certifie pas l'activité réelle sur place.",
+      "license": "Licence Ouverte 2.0",
+      "license_url": "https://www.data.gouv.fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret",
+      "frequency": "Stocks mensuels; API pour actualisations infra-mensuelles",
+      "formats": [
+        "CSV dans ZIP",
+        "Parquet",
+        "API JSON avec compte"
+      ],
+      "page": "https://www.insee.fr/fr/information/3591226",
+      "download_urls": [
+        "https://www.data.gouv.fr/api/1/datasets/r/825f4199-cadd-486c-ac46-a65a8ea1a047",
+        "https://www.data.gouv.fr/api/1/datasets/r/0651fb76-bcf3-4f6a-a38d-bc04fa708576"
+      ],
+      "automation": "Résoudre les ressources stables data.gouv, épingler URL datée/empreinte officielle et importer les deux stocks courants ensemble.",
+      "adapter": "ready_csv_zip; parquet_optional_pyarrow",
+      "sample": "Schéma officiel testé par fixtures; extrait réel d'identité via API Recherche d'entreprises",
+      "limits": "Filtrage O/actif; pas de réidentification de P/[ND]. Arrêt annoncé des CSV au second semestre 2027.",
+      "download_links_checked_at_utc": "2026-10-29T20:25:47+00:00"
+    },
+    {
+      "id": "sirene_geolocation",
+      "label": "Géolocalisation INSEE des établissements",
+      "producer": "INSEE",
+      "authority": "public",
+      "reliability": "Géocodage officiel pour études statistiques; seules les coordonnées GPS publiées de qualité 11 sont acceptées, avec leur qualité et leur provenance.",
+      "license": "Licence Ouverte 2.0",
+      "license_url": "https://www.data.gouv.fr/datasets/geolocalisation-des-etablissements-du-repertoire-sirene-pour-les-etudes-statistiques",
+      "frequency": "Mensuelle",
+      "formats": [
+        "CSV ZIP",
+        "Parquet"
+      ],
+      "page": "https://www.data.gouv.fr/datasets/geolocalisation-des-etablissements-du-repertoire-sirene-pour-les-etudes-statistiques",
+      "download_urls": [
+        "https://static.data.gouv.fr/resources/geolocalisation-des-etablissements-du-repertoire-sirene-pour-les-etudes-statistiques/20261021-064721/geoloc-geolocalisationetablissement-sirene-pour-etudes-statistiques-parquet.parquet"
+      ],
+      "automation": "Résoudre la ressource mensuelle officielle via API data.gouv, vérifier son empreinte, puis mettre à jour uniquement les SIRET déjà présents par jointure exacte.",
+      "adapter": "ready_published_gps_quality_11_only; parquet_optional_pyarrow",
+      "sample": "Stock officiel téléchargé, SHA1 conforme le 31 octobre 2026 : 38 016 211 lignes. Premier lot borné de 1 000 lignes : 872 qualité 11, 127 qualité 12, 1 qualité 21. Import complet distinct du contrôle de téléchargement.",
+      "limits": "Mayotte n'est pas couverte. Qualité 11 uniquement; les autres qualités sont rejetées. Utiliser y_latitude/x_longitude publiés, sans convertir ni interpréter X/Y projetés. Aucun SIRET créé par cette source; mise à jour par SIRET exact uniquement. Aucune exhaustivité nationale attestée.",
+      "resource_last_modified_utc": "2026-10-21T06:48:12.402000+00:00",
+      "resource_checksum": {
+        "type": "sha1",
+        "value": "de7c6d25615854bca45886405438a3adf6baa1ac"
+      }
+    },
+    {
+      "id": "annuaire",
+      "label": "API Recherche d'entreprises",
+      "producer": "DINUM / administrations partenaires",
+      "authority": "public",
+      "reliability": "Synthèse ouverte de sources administratives; ne constitue pas un export intégral SIRENE.",
+      "license": "Licences des sources publiques; respecter leurs restrictions",
+      "license_url": "https://recherche-entreprises.api.gouv.fr/docs/",
+      "frequency": "Selon les sources amont; dates INSEE/RNE disponibles",
+      "formats": [
+        "JSON"
+      ],
+      "page": "https://annuaire-entreprises.data.gouv.fr/donnees/api-entreprises",
+      "download_urls": [
+        "https://recherche-entreprises.api.gouv.fr/search?q=552081317&per_page=1"
+      ],
+      "automation": "Requêtes ciblées/contrôles; respecter 429/Retry-After. Ne pas reconstituer le national par balayage API.",
+      "adapter": "ready_json_siege_and_matching_etablissements",
+      "sample": "EDF, une unité légale et son siège actif géocodé",
+      "limits": "Les autres établissements d'une entreprise ne sont pas tous renvoyés dans une seule recherche; ne pas annoncer une couverture exhaustive."
+    },
+    {
+      "id": "geography",
+      "label": "COG et découpage administratif",
+      "producer": "INSEE / DINUM API Geo",
+      "authority": "public",
+      "reliability": "Codes géographiques officiels; conserver le millésime des communes/IRIS.",
+      "license": "Licence Ouverte 2.0",
+      "license_url": "https://geo.api.gouv.fr/decoupage-administratif",
+      "frequency": "Selon évolutions administratives; millésimes COG annuels",
+      "formats": [
+        "CSV",
+        "JSON",
+        "GeoJSON"
+      ],
+      "page": "https://geo.api.gouv.fr/decoupage-administratif",
+      "download_urls": [
+        "https://geo.api.gouv.fr/departements?fields=code,nom,codeRegion"
+      ],
+      "automation": "Référentiel 101 départements chargé une fois, génération automatique des régions correspondantes.",
+      "adapter": "ready_department_region_reference",
+      "sample": "101 départements récupérés, Corse et DROM compris",
+      "limits": "Un rattachement département-région n'est pas une preuve de couverture complète des entreprises."
+    },
+    {
+      "id": "naf",
+      "label": "NAF rév.2, NAF 2025 et correspondances",
+      "producer": "INSEE",
+      "authority": "public",
+      "reliability": "Nomenclature officielle; une correspondance multiple ne recode pas un établissement.",
+      "license": "Licence Ouverte (données INSEE)",
+      "license_url": "https://www.insee.fr/fr/information/2008466?page=copyright.htm",
+      "frequency": "À chaque révision/édition",
+      "formats": [
+        "XLSX",
+        "PDF",
+        "CSV dérivé local"
+      ],
+      "page": "https://www.insee.fr/fr/information/8617910",
+      "download_urls": [
+        "https://www.insee.fr/fr/statistiques/fichier/8617910/Correspondances_NAFrev2-NAF2025.xlsx"
+      ],
+      "automation": "build_naf_reference.py relit le classeur, conserve SHA256 et ambiguïtés dans le référentiel.",
+      "adapter": "ready_official_crosswalk_conservative_categories",
+      "sample": "Classeur officiel 222781 octets; 1223 liens lus",
+      "limits": "Les codes APE 2025 s'appliquent à partir du 1er janvier2027; aucun remplacement automatique du code individuel actuel."
+    }
+  ],
+  "national_job": {
+    "approved_at_client_date": "2026-10-30",
+    "directory": "D:/ProspectoDataNational",
+    "expected_archives_bytes": 4803611307,
+    "actual_fallback_archives_bytes": 4673873360,
+    "work_cap_bytes": 80000000000,
+    "note": "BAN indisponible en téléchargement; remplacement par le GPS publié INSEE qualité 11. Trois stocks téléchargés avec SHA1 officiels conformes le 31 octobre 2026. Plafond initial inchangé."
+  }
+}

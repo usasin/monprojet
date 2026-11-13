@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "version": "2026-10-30-paris-extrait-v3",
+  "data_date": "2026-10-29",
+  "is_demo": false,
+  "energy_enabled": false,
+  "packs": [
+    {
+      "schema_version": 1,
+      "pack_id": "fr-75",
+      "version": "2026-10-30-paris-extrait-v3",
+      "department": "75",
+      "region": "11",
+      "partition": "department",
+      "data_date": "2026-10-29",
+      "is_demo": false,
+      "coverage_complete": false,
+      "coverage_geojson": {
+        "coordinates": [
+          [
+            [
+              2.2861523295,
+              48.840081584
+            ],
+            [
+              2.36975132651102,
+              48.840081584
+            ],
+            [
+              2.36975132651102,
+              48.890203639
+            ],
+            [
+              2.2861523295,
+              48.890203639
+            ],
+            [
+              2.2861523295,
+              48.840081584
+            ]
+          ]
+        ],
+        "type": "Polygon"
+      },
+      "coverage_kind": "data_extent",
+      "source_licenses": [
+        "Licence Ouverte 2.0 (sources publiques, voir provenance et source_registry.json)"
+      ],
+      "categories_version": "2026-10-28-naf2025-officielle",
+      "gzip_sha256": "0d78ae04642cc8ecdc2d246ff27d8c9424a411fb50faa0175dc59513c4a6a95e",
+      "sqlite_sha256": "344403ef1103d2438703196b75f7597395543269f54495788b2cbb68bbef7ab9",
+      "gzip_size_bytes": 26745,
+      "sqlite_size_bytes": 221184,
+      "rows": 50,
+      "url": "/v1/packs/fr-75/0d78ae04642cc8ecdc2d246ff27d8c9424a411fb50faa0175dc59513c4a6a95e.sqlite.gz"
+    }
+  ]
+}
